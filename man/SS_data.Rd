@@ -5,7 +5,7 @@
 \alias{SS_data}
 \title{Example State-space input data}
 \format{
-An object of class \code{data.frame} with 49 rows and 2 columns.
+An object of class \code{data.frame} with 41 rows and 2 columns.
 }
 \usage{
 SS_data
