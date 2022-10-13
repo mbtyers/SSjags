@@ -6,8 +6,6 @@
 #' to model arguments provided by the user.  This is written to a temporary text file,
 #' which is called by 'JAGS' using `jagsUI::jags()`.
 #'
-#' THIS IS WHERE I SHOULD TALK A LOT ABOUT THE MODEL FORMULATION!!
-#'
 #' ## Data model & state model
 #'
 #' Observation \eqn{y_i} at epoch \eqn{i} is treated as the sum of
@@ -212,6 +210,19 @@
 #' @param sigeps_breaks An optional vector of structural breakpoints in the irregular
 #' component, which may be interpreted as different irregular standard deviations
 #' in different time periods.  Defaults to `NULL`, indicating no breaks.
+#' @return An output object from `jagsUI::jags()`.  This will have the following parameters:
+#' * **trend** talk about this
+#' * **rate** talk about this
+#' * **cycle** talk about this
+#' * **cycle_s** talk about this
+#' * **cycle_d** talk about this
+#' * **ar1** talk about this
+#' * **fit** talk about this
+#' * **ypp** talk about this
+#' * **sig_eps** talk about this
+#' * **sig_xi** talk about this
+#' * **sig_omega** talk about this
+#' * **phi** talk about this
 #' @note DO I WANT A NOTE HERE??
 #' @author Matt Tyers
 #' @importFrom parallel detectCores
@@ -392,10 +403,12 @@ runSS <- function(y, x=NULL, runmodel=T,
     cat("started at ")
     print(tstart)
     jagsout <- jagsUI::jags(model.file=tmp, data=SS_data,
-                            parameters.to.save=c("trend","rate","ypp","fit",
-                                                 "sig_eps","sig_xi","sig_omega",
+                            parameters.to.save=c("trend","rate",
                                                  "cycle","cycle_s","cycle_d",
-                                                 "ar1","phi"),
+                                                 "ar1",
+                                                 "fit","ypp",
+                                                 "sig_eps","sig_xi","sig_omega",
+                                                 "phi"),
                             n.chains=ncores, parallel=T, n.iter=niter,
                             n.burnin=niter/2, n.thin=niter/outlength/2)
 

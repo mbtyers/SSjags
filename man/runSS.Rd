@@ -80,6 +80,23 @@ will be ignored if \code{AR1==FALSE}.  Defaults to \code{"dunif(0,1)"}}
 component, which may be interpreted as different irregular standard deviations
 in different time periods.  Defaults to \code{NULL}, indicating no breaks.}
 }
+\value{
+An output object from \code{jagsUI::jags()}.  This will have the following parameters:
+\itemize{
+\item \strong{trend} talk about this
+\item \strong{rate} talk about this
+\item \strong{cycle} talk about this
+\item \strong{cycle_s} talk about this
+\item \strong{cycle_d} talk about this
+\item \strong{ar1} talk about this
+\item \strong{fit} talk about this
+\item \strong{ypp} talk about this
+\item \strong{sig_eps} talk about this
+\item \strong{sig_xi} talk about this
+\item \strong{sig_omega} talk about this
+\item \strong{phi} talk about this
+}
+}
 \description{
 Automatically constructs and optionally runs a State-Space time series
 model, given an input time series and optional model components.
@@ -87,8 +104,6 @@ model, given an input time series and optional model components.
 This is a wrapper function, which constructs a model using the JAGS syntax according
 to model arguments provided by the user.  This is written to a temporary text file,
 which is called by 'JAGS' using \code{jagsUI::jags()}.
-
-THIS IS WHERE I SHOULD TALK A LOT ABOUT THE MODEL FORMULATION!!
 \subsection{Data model & state model}{
 
 Observation \eqn{y_i} at epoch \eqn{i} is treated as the sum of
