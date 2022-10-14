@@ -81,20 +81,31 @@ component, which may be interpreted as different irregular standard deviations
 in different time periods.  Defaults to \code{NULL}, indicating no breaks.}
 }
 \value{
-An output object from \code{jagsUI::jags()}.  This will have the following parameters:
+An output object from \code{jagsUI::jags()}.  This will have the following
+parameters, in which n_t denotes the length of the input time series and
+n_s and n_d denote the number of stochastic and deterministic cycle periods, respectively:
 \itemize{
-\item \strong{trend} talk about this
-\item \strong{rate} talk about this
-\item \strong{cycle} talk about this
-\item \strong{cycle_s} talk about this
-\item \strong{cycle_d} talk about this
-\item \strong{ar1} talk about this
-\item \strong{fit} talk about this
-\item \strong{ypp} talk about this
-\item \strong{sig_eps} talk about this
-\item \strong{sig_xi} talk about this
-\item \strong{sig_omega} talk about this
-\item \strong{phi} talk about this
+\item \strong{trend: vector of length n_t} Trend \eqn{\mu_i} at each epoch \eqn{i}
+\item \strong{rate: vector of length n_t} Rate \eqn{\nu_i} at each epoch \eqn{i}
+\item \strong{cycle (possibly): vector of length n_t} Full sum of cycle components
+\eqn{\sum_jc_{i,j}} at each epoch \eqn{i}
+\item \strong{cycle_s (possibly): matrix of dimensions n_t x n_s} Cycle components
+\eqn{c_{i,j}} at each epoch \eqn{i} and stochastic cycle period \eqn{j}
+\item \strong{cycle_d (possibly): matrix of dimensions n_t x n_d} Cycle components
+\eqn{c_{i,j}} at each epoch \eqn{i} and deterministic cycle period \eqn{j}
+\item \strong{ar1 (possibly): vector of length n_t} AR(1) autoregressive component
+\eqn{\zeta_i} at each epoch \eqn{i}
+\item \strong{fit: vector of length n_t} Fitted value at each epoch \eqn{i}, equivalent
+to the sum of the trend, cycle, and autoregressive components and excluding
+the irregular component \eqn{\epsilon_i}
+\item \strong{ypp: vector of length n_t} Posterior-predicted value at each epoch \eqn{i},
+equivalent to sampling a predicted value for each MCMC sample given that sample's
+values of fit and irregular standard deviation
+\item \strong{sig_eps: single value} Irregular standard deviation \eqn{\sigma_\epsilon}
+\item \strong{sig_xi: single value} Rate disturbance standard deviation \eqn{\sigma_\xi}
+\item \strong{sig_omega (possibly): vector of length n_s} Cycle disturbance standard
+deviations \eqn{\sigma_{\omega,j}} for each stochastic period \eqn{j}
+\item \strong{phi (possibly): single value} Autoregressive parameter \eqn{\phi}
 }
 }
 \description{
@@ -148,7 +159,7 @@ for each dataset bounded on the interval \eqn{[0,1]}, and normalized time step \
 FIGURE OUT IF THE NORMALIZED TIME STEP BUSINESS IS CORRECT
 
 \deqn{
-\zeta_{i+1}=\zeta_i\phi^{dt_i}+\psi_i
+\zeta_{i+1}=\epsilon_i\phi^{dt_i}
 }
 
 \deqn{
@@ -198,17 +209,31 @@ c^*_{1,j} \sim N(0,\frac{1}{0.001})
 }
 }
 
-\subsection{Disturbance variances and Hyperpriors}{
-\subsection{Irregular component}{
+\subsection{Disturbance distributions and hyperpriors}{
 
-The irregular component \eqn{\epsilon_i} is modeled as Gaussian.
+The irregular component \eqn{\epsilon_i}, rate disturbance component \eqn{\xi_i},
+and cyclic component disturbances \eqn{\omega_{i,j}} and \eqn{\omega^*_{i,j}}
+associated with frequency \eqn{j} are treated as Gaussian.
 
 \deqn{
 \epsilon_i \sim N(0,\sigma_\epsilon dt_i)
 }
 
-Hyperparameter \eqn{\sigma_\epsilon}
-is given as a default value an exponential prior with rate parameter 0.2, giving an expected value
+\deqn{
+\xi_i \sim N(0,\sigma_\xi dt_i)
+}
+
+\deqn{
+\omega_{i,j} \sim N(0,\sigma_{\omega,j} dt_i)
+}
+
+\deqn{
+\omega^*_{i,j} \sim N(0,\sigma_{\omega,j} dt_i)
+}
+
+Standard deviation hyperparameters \eqn{\sigma_\epsilon}, \eqn{\sigma_\xi},
+and \eqn{\sigma_\omega}
+are given (by default) exponential priors with rate parameter 0.2, giving an expected value
 of 5.  The exponential distribution gives a natural lower bound of zero, and
 is intended to account for scale-dependence.  Note that priors are defined on
 the standard deviation scale, as opposed to variance.
@@ -216,59 +241,24 @@ the standard deviation scale, as opposed to variance.
 \deqn{
 \sigma_\epsilon \sim Exp(0.2)
 }
-}
-
-\subsection{Rate disturbance}{
-
-The rate disturbance component \eqn{\xi_i} is also modeled as
-Gaussian.
 
 \deqn{
-\xi_i \sim N(0,\sigma_\xi dt_i)
+\sigma_\xi \sim Exp(0.2)
 }
-
-Hyperparameter \eqn{\sigma_{\xi}} is similarly given by default an exponential prior
-with rate parameter 0.2, again on the standard deviation scale.
 
 \deqn{
-\sigma_{\xi^*} \sim Exp(0.2)
-}
-}
-
-\subsection{AR(1) process}{
-
-The AR(1) process is expressed as follows:
-
-\deqn{
-\zeta_i = \phi\epsilon_{i-1}
+\sigma_\omega \sim Exp(0.2)
 }
 
 The AR(1) autoregressive parameters \eqn{\phi} is bounded on the interval \eqn{[0,1]}
 and is given by default a Uniform(0,1) prior.
-}
-
-\subsection{Cyclic component disturbance}{
-
-Cyclic component disturbances \eqn{\omega_{i,j}} and \eqn{\omega^*_{i,j}}
-associated with frequency \eqn{j} are treated as Gaussian.
 
 \deqn{
-\omega_{i,j} \sim N(0,\sigma_{\omega,j} dt_i)
+\phi \sim Unif(0,1)
 }
 
-\deqn{
-\omega^*_{i,j} \sim N(0,\sigma_{\omega^*,j} dt_i)
-}
-
-Hyperparameters \eqn{\sigma_{\omega_j}^{(m)}} and \eqn{\sigma_{\omega_{j^*}}^{(v)}}
-corresponding to frequency \eqn{j} are given by default exponential priors with rate parameter
-0.2, again on the standard deviation scale.
-
-\deqn{
-\sigma_{\omega_j}^{(m)} \sim Exp(0.2)
-}
-}
-
+Note that different prior distributions may be used instead for hyperparameters,
+as well as fixed values.
 }
 }
 \note{
