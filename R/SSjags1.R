@@ -213,16 +213,16 @@
 #' @return An output object from `jagsUI::jags()`.  This will have the following parameters:
 #' * **trend** talk about this
 #' * **rate** talk about this
-#' * **cycle** talk about this
-#' * **cycle_s** talk about this
-#' * **cycle_d** talk about this
-#' * **ar1** talk about this
+#' * **cycle (possibly)** talk about this
+#' * **cycle_s (possibly)** talk about this
+#' * **cycle_d (possibly)** talk about this
+#' * **ar1 (possibly)** talk about this
 #' * **fit** talk about this
 #' * **ypp** talk about this
 #' * **sig_eps** talk about this
 #' * **sig_xi** talk about this
-#' * **sig_omega** talk about this
-#' * **phi** talk about this
+#' * **sig_omega (possibly)** talk about this
+#' * **phi (possibly)** talk about this
 #' @note DO I WANT A NOTE HERE??
 #' @author Matt Tyers
 #' @importFrom parallel detectCores
