@@ -10,15 +10,17 @@
 #'
 #' Observation \eqn{y_i} at epoch \eqn{i} is treated as the sum of
 #' trend \eqn{\mu_i}, cycle (seasonal harmonic) terms \eqn{\sum_jc_{i,j}}, AR(1)
-#' process \eqn{\zeta_i}, and an irregular term \eqn{\epsilon_i} which consists of
-#' observation error plus un-modeled signal.  -- INTEGRATED RANDOM WALK?? FIND OUT THE PROPER TERM
+#' process \eqn{\zeta_i}, and an irregular term \eqn{\epsilon_i}.  The irregular
+#' term may be interpreted as consisting of
+#' observation error plus un-modeled signal.
 #'
 #' \deqn{
 #' y_i = \mu_i+\sum_jc_{i,j}+\zeta_i+\epsilon_i
 #' }
 #'
 #' The trend is defined as the following, with a stochastic disturbance \eqn{\xi_i}
-#' acting on the rate \eqn{\nu_i}.
+#' acting on the rate \eqn{\nu_i}.  With stochastic disturbances acting on the rate,
+#' this may be termed an Integrated Random Walk model.
 #'
 #' \deqn{
 #' \mu_{i+1}=\mu_i+\nu_idt_i
@@ -45,12 +47,11 @@
 #' }
 #'
 #' The AR(1) process is modeled as below, with autoregressive parameter \eqn{\phi}
-#' for each dataset bounded on the interval \eqn{[0,1]}, and normalized time step \eqn{dt_i} calculated as shown below.
-#'
-#' FIGURE OUT IF THE NORMALIZED TIME STEP BUSINESS IS CORRECT
+#' for each dataset bounded on the interval \eqn{[0,1]}, and normalized time step
+#' \eqn{dt_i} calculated as shown below.
 #'
 #' \deqn{
-#' \zeta_{i+1}=\epsilon_i\phi^{dt_i}
+#' \zeta_{i+1}=\zeta_i\phi^{dt_i} + \psi_i
 #' }
 #'
 #' \deqn{
@@ -79,8 +80,6 @@
 #' will be much greater than that of any smoothed rate, therefore this provides
 #' a relatively diffuse prior distribution.
 #'
-#' NORMALIZED TIME STEP??
-#'
 #' \deqn{
 #' \nu_1 \sim N(0, \hat{V}(\frac{\Delta y_.}{dt_.}))
 #' }
@@ -98,11 +97,11 @@
 #' c^*_{1,j} \sim N(0,\frac{1}{0.001})
 #' }
 #'
-#' ## Disturbance distributions and hyperpriors
+#' ## Disturbance distributions and (default) hyperpriors
 #'
 #' The irregular component \eqn{\epsilon_i}, rate disturbance component \eqn{\xi_i},
-#' and cyclic component disturbances \eqn{\omega_{i,j}} and \eqn{\omega^*_{i,j}}
-#' associated with frequency \eqn{j} are treated as Gaussian.
+#' cyclic component disturbances \eqn{\omega_{i,j}} and \eqn{\omega^*_{i,j}}
+#' associated with frequency \eqn{j}, and AR(1) disturbance \eqn{psi_i} are treated as Gaussian.
 #'
 #' \deqn{
 #' \epsilon_i \sim N(0,\sigma_\epsilon dt_i)
@@ -120,12 +119,19 @@
 #' \omega^*_{i,j} \sim N(0,\sigma_{\omega,j} dt_i)
 #' }
 #'
-#' Standard deviation hyperparameters \eqn{\sigma_\epsilon}, \eqn{\sigma_\xi},
-#' and \eqn{\sigma_\omega}
+#' \deqn{
+#' \psi_i \sim N(0,\sigma_\psi dt_i)
+#' }
+#'
+#' Standard deviation hyperparameters \eqn{\sigma_\epsilon}, \eqn{\sigma_\xi},\eqn{\sigma_{\omega,j}},
+#' and \eqn{\sigma_\psi}
 #' are given (by default) exponential priors with rate parameter 0.2, giving an expected value
 #' of 5.  The exponential distribution gives a natural lower bound of zero, and
 #' is intended to account for scale-dependence.  Note that priors are defined on
 #' the standard deviation scale, as opposed to variance.
+#'
+#' All (hyper)prior distributions are given defaults shown below, but can be specified
+#' by the user according to JAGS syntax.
 #'
 #' \deqn{
 #' \sigma_\epsilon \sim Exp(0.2)
@@ -136,7 +142,11 @@
 #' }
 #'
 #' \deqn{
-#' \sigma_\omega \sim Exp(0.2)
+#' \sigma_{\omega,j} \sim Exp(0.2)
+#' }
+#'
+#' \deqn{
+#' \sigma_\psi \sim Exp(0.2)
 #' }
 #'
 #' The AR(1) autoregressive parameters \eqn{\phi} is bounded on the interval \eqn{[0,1]}
@@ -172,7 +182,7 @@
 #' units of time.  Defaults to `NULL`, indicating no stochastic cycle present.
 #' @param deterministicPeriods An optional vector of deterministic cycle periods, in
 #' units of time.  Defaults to `NULL`, indicating no deterministic cycle present.
-#' @param AR1 Whether to include autocorrelation (red noise) in the irregular term.
+#' @param AR1 Whether to include an AR(1) autoregressive process.
 #' Defaults to `FALSE`.
 #' @param sig_eps_prior The prior used for the IRREGULAR standard deviation(s),
 #' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
@@ -184,6 +194,10 @@
 #' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
 #' to a constant, instead of treating it as a modeled quantity.  Note that this argument
 #' will be ignored if `stochasticPeriods` is set to `NULL`.  Defaults to `"dexp(0.2)"`
+#' @param sig_psi_prior The prior used for the AR(1) PROCESS DISTURBANCE standard deviation,
+#' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
+#' to a constant, instead of treating it as a modeled quantity.  Note that this argument
+#' will be ignored unless `AR1` is set to `process`.  Defaults to `"dexp(0.2)"`
 #' @param phi_prior The prior used for the AR(1) autoregressive parameter,
 #' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
 #' to a constant, instead of treating it as a modeled quantity.  Note that this argument
@@ -191,6 +205,14 @@
 #' @param sigeps_breaks An optional vector of structural breakpoints in the irregular
 #' component, which may be interpreted as different irregular standard deviations
 #' in different time periods.  Defaults to `NULL`, indicating no breaks.
+#' @param normalizedRate Whether to express treat the RATE DISTURBANCES as occurring
+#' on the normalized time scale, as opposed to the data time scale.  If this is set
+#' to `TRUE`, the rates and rate disturbance standard deviation may be interpreted
+#' as rate per normalized time step; If this is set
+#' to `FALSE`, the rates and rate disturbance standard deviation may be interpreted
+#' as rate per unit time with respect to the input data units.  This functionality
+#' is retained in order to facilitate comparison with output from other software.
+#' Defaults to `TRUE`.
 #' @return An output object from `jagsUI::jags()`.  This will have the following
 #' parameters, in which n_t denotes the length of the input time series and
 #' n_s and n_d denote the number of stochastic and deterministic cycle periods, respectively:
@@ -226,19 +248,25 @@
 #' ## FILL THIS IN
 #' @export
 runSS <- function(y, x=NULL, runmodel=T,
-                      niter=2000, ncores=NULL, parallel=TRUE,outlength=1000,
-                      stochasticPeriods=NULL, deterministicPeriods=NULL, AR1=FALSE,
-                      sig_eps_prior="dexp(0.2)",
-                      sig_xi_prior="dexp(0.2)",
-                      sig_omega_prior="dexp(0.2)",
-                      phi_prior="dunif(0,1)",
-                      sigeps_breaks=NULL) {
+                  niter=2000, ncores=NULL, parallel=TRUE,outlength=1000,
+                  stochasticPeriods=NULL, deterministicPeriods=NULL, AR1=FALSE,
+                  sig_eps_prior="dexp(0.2)",
+                  sig_xi_prior="dexp(0.2)",
+                  sig_omega_prior="dexp(0.2)",
+                  sig_psi_prior="dexp(0.2)",
+                  phi_prior="dunif(0,1)",
+                  sigeps_breaks=NULL,
+                  normalizedRate=TRUE) {
 
   if(is.null(ncores)) ncores <- parallel::detectCores()-1
   if(is.na(ncores)) stop("Unable to detect number of cores, please set ncores= manually.")
   tmp <- tempfile()
 
-  isAR1 <- AR1
+  isAR1noise <- AR1=="noise"
+  isAR1process <- (AR1=="process")|(AR1==T)
+  if(AR1==F) {
+    isAR1noise <- isAR1process <- F
+  }
   isDetcycle <- !is.null(deterministicPeriods)
   isStochcycle <- !is.null(stochasticPeriods)
   isSigeps_split <- !is.null(sigeps_breaks)
@@ -247,7 +275,7 @@ runSS <- function(y, x=NULL, runmodel=T,
   for(i in 1:n) {
     fit[i] <- trend[i]',file=tmp)
   if(isDetcycle | isStochcycle) cat(' + cycle[i]',file=tmp, append=T)
-  if(isAR1) cat(' + ar1[i]',file=tmp, append=T)
+  if(isAR1noise | isAR1process) cat(' + ar1[i]',file=tmp, append=T)
   cat('
     y[i] ~ dnorm(fit[i], tau_eps',file=tmp, append=T)      ###### y[i] ~ dnorm(trend[i], tau_eps'
   if(isSigeps_split) cat('[sigeps_split[i]]', file=tmp, append=T)
@@ -256,13 +284,20 @@ runSS <- function(y, x=NULL, runmodel=T,
   if(isSigeps_split) cat('[sigeps_split[i]]', file=tmp, append=T)
   cat(')
   }
-  for(i in 2:n) {
-    trend[i] <- trend[i-1] + rate[i-1]*dt2[i]
+  for(i in 2:n) {',file=tmp, append=T)
+  if(normalizedRate) cat('
+    trend[i] <- trend[i-1] + rate[i-1]*dt[i]',file=tmp, append=T)
+  if(!normalizedRate) cat('
+    trend[i] <- trend[i-1] + rate[i-1]*dt2[i]',file=tmp, append=T)
+  cat('
     rate[i] ~ dnorm(rate[i-1], tau_xi)
 ',file=tmp, append=T)
-  if(isAR1) cat('
+  if(isAR1noise) cat('
     res[i] <- y[i]-fit[i]
-    ar1[i] <- res[i-1]*phi     ## phi might need to be ^dt[i]
+    ar1[i] <- res[i-1]*(phi^dt[i])
+',file=tmp, append=T)
+  if(isAR1process) cat('
+    ar1[i] ~ dnorm(ar1[i-1]*(phi^dt[i]), tau_psi)
 ',file=tmp, append=T)
   if(isStochcycle) cat('
     for(i_ps in 1:n_ps) {
@@ -291,8 +326,11 @@ runSS <- function(y, x=NULL, runmodel=T,
   trend[1] ~ dnorm(0, trendprecinit[1])  ###y[1]
   rate[1] ~ dnorm(0, rateprecinit[1])
 ', file=tmp, append=T)
-  if(isAR1) cat('
+  if(isAR1noise) cat('
   res[1] <- 0
+  ar1[1] <- 0
+', file=tmp, append=T)
+  if(isAR1process) cat('
   ar1[1] <- 0
 ', file=tmp, append=T)
   if(isStochcycle) cat('
@@ -354,9 +392,17 @@ runSS <- function(y, x=NULL, runmodel=T,
   }
 ', file=tmp, append=T)
   }
-  if(isAR1) {
+  if(isAR1process) {
     cat('
-
+  tau_psi <- pow(sig_psi, -2)
+  sig_psi', file=tmp, append=T)
+    if(!is.numeric(sig_psi_prior)) cat(' ~',sig_psi_prior, file=tmp, append=T)
+    if(is.numeric(sig_psi_prior)) {
+      cat(' <-',sig_psi_prior, file=tmp, append=T)
+    }
+  }
+  if(isAR1process | isAR1noise) {
+    cat('
   phi', file=tmp, append=T)
     if(!is.numeric(phi_prior)) cat(' ~', phi_prior, file=tmp, append=T)
     if(is.numeric(phi_prior)) cat(' <-', phi_prior, file=tmp, append=T)
@@ -379,7 +425,7 @@ runSS <- function(y, x=NULL, runmodel=T,
                     tt=x-x[1], pi=pi, x=x)
     SS_data$y[is.nan(SS_data$y)] <- NA
     SS_data$trendprecinit <- 1/var(SS_data$y, na.rm=T)
-    SS_data$rateprecinit <- 1/var(diff(SS_data$y)/diff(SS_data$tt), na.rm=T)
+    SS_data$rateprecinit <- 1/var(diff(SS_data$y)/diff(SS_data$tt), na.rm=T)  ### make this normalized time step!!
 
     SS_data$sigeps_split <- as.numeric(cut(SS_data$x, c(min(SS_data$x),sigeps_breaks,max(SS_data$x)), include.lowest=T))
     SS_data$n_sigeps_split <- max(SS_data$sigeps_split)
@@ -400,6 +446,7 @@ runSS <- function(y, x=NULL, runmodel=T,
                                                  "ar1",
                                                  "fit","ypp",
                                                  "sig_eps","sig_xi","sig_omega",
+                                                 "sig_psi",   ### added sig_psi
                                                  "phi"),
                             n.chains=ncores, parallel=T, n.iter=niter,
                             n.burnin=niter/2, n.thin=niter/outlength/2)
@@ -460,6 +507,7 @@ envelope_separate <- function(y,x,col=NA,xlab="",ylab="",main="",...) {  # x is 
 #' @param collapsecycle Whether to collapse all stochastic and/or deterministic
 #' cycle components as one single Cycle component
 #' @param ... additional arguments to \link[jagshelper]{envelope}
+#' @return NULL
 #' @author Matt Tyers
 #' @importFrom jagshelper envelope
 #' @examples
@@ -541,6 +589,7 @@ plot_components <- function(jagsout, y=NULL, x=NULL, collapsecycle=FALSE, ...) {
 #' @param collapsecycle Whether to collapse all stochastic and/or deterministic
 #' cycle components as one single Cycle component
 #' @param ... additional plotting arguments
+#' @return NULL
 #' @author Matt Tyers
 #' @importFrom lomb lsp
 #' @examples

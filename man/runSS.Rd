@@ -18,8 +18,10 @@ runSS(
   sig_eps_prior = "dexp(0.2)",
   sig_xi_prior = "dexp(0.2)",
   sig_omega_prior = "dexp(0.2)",
+  sig_psi_prior = "dexp(0.2)",
   phi_prior = "dunif(0,1)",
-  sigeps_breaks = NULL
+  sigeps_breaks = NULL,
+  normalizedRate = TRUE
 )
 }
 \arguments{
@@ -55,7 +57,7 @@ units of time.  Defaults to \code{NULL}, indicating no stochastic cycle present.
 \item{deterministicPeriods}{An optional vector of deterministic cycle periods, in
 units of time.  Defaults to \code{NULL}, indicating no deterministic cycle present.}
 
-\item{AR1}{Whether to include autocorrelation (red noise) in the irregular term.
+\item{AR1}{Whether to include an AR(1) autoregressive process.
 Defaults to \code{FALSE}.}
 
 \item{sig_eps_prior}{The prior used for the IRREGULAR standard deviation(s),
@@ -71,6 +73,11 @@ expressed in 'JAGS' syntax.  Note that providing a number here will set this val
 to a constant, instead of treating it as a modeled quantity.  Note that this argument
 will be ignored if \code{stochasticPeriods} is set to \code{NULL}.  Defaults to \code{"dexp(0.2)"}}
 
+\item{sig_psi_prior}{The prior used for the AR(1) PROCESS DISTURBANCE standard deviation,
+expressed in 'JAGS' syntax.  Note that providing a number here will set this value
+to a constant, instead of treating it as a modeled quantity.  Note that this argument
+will be ignored unless \code{AR1} is set to \code{process}.  Defaults to \code{"dexp(0.2)"}}
+
 \item{phi_prior}{The prior used for the AR(1) autoregressive parameter,
 expressed in 'JAGS' syntax.  Note that providing a number here will set this value
 to a constant, instead of treating it as a modeled quantity.  Note that this argument
@@ -79,6 +86,15 @@ will be ignored if \code{AR1==FALSE}.  Defaults to \code{"dunif(0,1)"}}
 \item{sigeps_breaks}{An optional vector of structural breakpoints in the irregular
 component, which may be interpreted as different irregular standard deviations
 in different time periods.  Defaults to \code{NULL}, indicating no breaks.}
+
+\item{normalizedRate}{Whether to express treat the RATE DISTURBANCES as occurring
+on the normalized time scale, as opposed to the data time scale.  If this is set
+to \code{TRUE}, the rates and rate disturbance standard deviation may be interpreted
+as rate per normalized time step; If this is set
+to \code{FALSE}, the rates and rate disturbance standard deviation may be interpreted
+as rate per unit time with respect to the input data units.  This functionality
+is retained in order to facilitate comparison with output from other software.
+Defaults to \code{TRUE}.}
 }
 \value{
 An output object from \code{jagsUI::jags()}.  This will have the following
@@ -119,15 +135,17 @@ which is called by 'JAGS' using \code{jagsUI::jags()}.
 
 Observation \eqn{y_i} at epoch \eqn{i} is treated as the sum of
 trend \eqn{\mu_i}, cycle (seasonal harmonic) terms \eqn{\sum_jc_{i,j}}, AR(1)
-process \eqn{\zeta_i}, and an irregular term \eqn{\epsilon_i} which consists of
-observation error plus un-modeled signal.  -- INTEGRATED RANDOM WALK?? FIND OUT THE PROPER TERM
+process \eqn{\zeta_i}, and an irregular term \eqn{\epsilon_i}.  The irregular
+term may be interpreted as consisting of
+observation error plus un-modeled signal.
 
 \deqn{
 y_i = \mu_i+\sum_jc_{i,j}+\zeta_i+\epsilon_i
 }
 
 The trend is defined as the following, with a stochastic disturbance \eqn{\xi_i}
-acting on the rate \eqn{\nu_i}.
+acting on the rate \eqn{\nu_i}.  With stochastic disturbances acting on the rate,
+this may be termed an Integrated Random Walk model.
 
 \deqn{
 \mu_{i+1}=\mu_i+\nu_idt_i
@@ -154,12 +172,11 @@ c^*_{i+1,j}=-c_{i,j}sin(\lambda_jdt_i)+c^*_{i,j}cos(\lambda_jdt_i)+\omega^*_{i,j
 }
 
 The AR(1) process is modeled as below, with autoregressive parameter \eqn{\phi}
-for each dataset bounded on the interval \eqn{[0,1]}, and normalized time step \eqn{dt_i} calculated as shown below.
-
-FIGURE OUT IF THE NORMALIZED TIME STEP BUSINESS IS CORRECT
+for each dataset bounded on the interval \eqn{[0,1]}, and normalized time step
+\eqn{dt_i} calculated as shown below.
 
 \deqn{
-\zeta_{i+1}=\epsilon_i\phi^{dt_i}
+\zeta_{i+1}=\zeta_i\phi^{dt_i} + \psi_i
 }
 
 \deqn{
@@ -189,8 +206,6 @@ providing a range of empirical rates.  The variance of these empirical rates
 will be much greater than that of any smoothed rate, therefore this provides
 a relatively diffuse prior distribution.
 
-NORMALIZED TIME STEP??
-
 \deqn{
 \nu_1 \sim N(0, \hat{V}(\frac{\Delta y_.}{dt_.}))
 }
@@ -209,11 +224,11 @@ c^*_{1,j} \sim N(0,\frac{1}{0.001})
 }
 }
 
-\subsection{Disturbance distributions and hyperpriors}{
+\subsection{Disturbance distributions and (default) hyperpriors}{
 
 The irregular component \eqn{\epsilon_i}, rate disturbance component \eqn{\xi_i},
-and cyclic component disturbances \eqn{\omega_{i,j}} and \eqn{\omega^*_{i,j}}
-associated with frequency \eqn{j} are treated as Gaussian.
+cyclic component disturbances \eqn{\omega_{i,j}} and \eqn{\omega^*_{i,j}}
+associated with frequency \eqn{j}, and AR(1) disturbance \eqn{psi_i} are treated as Gaussian.
 
 \deqn{
 \epsilon_i \sim N(0,\sigma_\epsilon dt_i)
@@ -231,12 +246,19 @@ associated with frequency \eqn{j} are treated as Gaussian.
 \omega^*_{i,j} \sim N(0,\sigma_{\omega,j} dt_i)
 }
 
-Standard deviation hyperparameters \eqn{\sigma_\epsilon}, \eqn{\sigma_\xi},
-and \eqn{\sigma_\omega}
+\deqn{
+\psi_i \sim N(0,\sigma_\psi dt_i)
+}
+
+Standard deviation hyperparameters \eqn{\sigma_\epsilon}, \eqn{\sigma_\xi},\eqn{\sigma_{\omega,j}},
+and \eqn{\sigma_\psi}
 are given (by default) exponential priors with rate parameter 0.2, giving an expected value
 of 5.  The exponential distribution gives a natural lower bound of zero, and
 is intended to account for scale-dependence.  Note that priors are defined on
 the standard deviation scale, as opposed to variance.
+
+All (hyper)prior distributions are given defaults shown below, but can be specified
+by the user according to JAGS syntax.
 
 \deqn{
 \sigma_\epsilon \sim Exp(0.2)
@@ -247,7 +269,11 @@ the standard deviation scale, as opposed to variance.
 }
 
 \deqn{
-\sigma_\omega \sim Exp(0.2)
+\sigma_{\omega,j} \sim Exp(0.2)
+}
+
+\deqn{
+\sigma_\psi \sim Exp(0.2)
 }
 
 The AR(1) autoregressive parameters \eqn{\phi} is bounded on the interval \eqn{[0,1]}
