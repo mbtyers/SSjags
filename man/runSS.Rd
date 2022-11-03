@@ -287,11 +287,19 @@ Note that different prior distributions may be used instead for hyperparameters,
 as well as fixed values.
 }
 }
-\note{
-DO I WANT A NOTE HERE??
-}
 \examples{
-## FILL THIS IN
+jagsout <- runSS(y = SS_data$y,                # vector of observations
+               x = SS_data$x,                  # associated time measurements
+               stochasticPeriods = c(1, 0.5),  # stochastic cycle periods
+               niter = 10000,                  # number of MCMC iterations
+               runmodel = F)                   # print to console
+
+\dontrun{
+jagsout <- runSS(y = SS_data$y,                # vector of observations
+               x = SS_data$x,                  # associated time measurements
+               stochasticPeriods = c(1, 0.5),  # stochastic cycle periods
+               niter = 100000)                 # number of MCMC iterations
+}
 }
 \author{
 Matt Tyers

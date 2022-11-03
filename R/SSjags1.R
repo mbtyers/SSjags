@@ -237,7 +237,6 @@
 #' * **sig_omega (possibly): vector of length n_s** Cycle disturbance standard
 #' deviations \eqn{\sigma_{\omega,j}} for each stochastic period \eqn{j}
 #' * **phi (possibly): single value** Autoregressive parameter \eqn{\phi}
-#' @note DO I WANT A NOTE HERE??
 #' @author Matt Tyers
 #' @importFrom parallel detectCores
 #' @importFrom jagsUI jags
@@ -245,7 +244,18 @@
 #' @importFrom graphics axis lines abline
 #' @importFrom stats median var quantile
 #' @examples
-#' ## FILL THIS IN
+#' jagsout <- runSS(y = SS_data$y,                # vector of observations
+#'                x = SS_data$x,                  # associated time measurements
+#'                stochasticPeriods = c(1, 0.5),  # stochastic cycle periods
+#'                niter = 10000,                  # number of MCMC iterations
+#'                runmodel = F)                   # print to console
+#'
+#' \dontrun{
+#' jagsout <- runSS(y = SS_data$y,                # vector of observations
+#'                x = SS_data$x,                  # associated time measurements
+#'                stochasticPeriods = c(1, 0.5),  # stochastic cycle periods
+#'                niter = 100000)                 # number of MCMC iterations
+#' }
 #' @export
 runSS <- function(y, x=NULL, runmodel=T,
                   niter=2000, ncores=NULL, parallel=TRUE,outlength=1000,

@@ -1,11 +1,16 @@
 Package: SSjags
 Type: Package
-Title: What the Package Does (Title Case)
-Version: 0.1.0
-Author: Who wrote it
-Maintainer: The package maintainer <yourself@somewhere.net>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
+Title: Construct and Fit a State-Space Model in 'JAGS' through 'jagsUI'
+Version: 0.1.1
+Date: 2022-11-02
+Author: Matt Tyers [aut, cre]
+Maintainer: Matt Tyers <matttyersstat@gmail.com>
+Description: The main functionality is a wrapper function that uses user input
+    to write model code in JAGS syntax to a temporary text file, and then 
+    optionally run that model with a user-supplied vector of time-series data 
+    and optionally corresponding time measurements.  A 'jagsUI' output object
+    is then returned.  Functions are also provided for visualization of the 
+    respective model components.
 License: GPL-2
 Encoding: UTF-8
 LazyData: true
