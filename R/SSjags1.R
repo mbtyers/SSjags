@@ -480,18 +480,22 @@ envelope_separate <- function(y,x,col=NA,xlab="",ylab="",main="",...) {  # x is 
   maxes <- sapply(y, function(x) max(apply(x,2,quantile, p=.95, na.rm=T),na.rm=T))
   mins <- sapply(y, function(x) min(apply(x,2,quantile, p=.05, na.rm=T),na.rm=T))
   ranges <- maxes-mins
-  plot(NA, xlim=range(x), ylim=c(mins[1]-sum(ranges[2:length(y)]),maxes[1]), yaxt="n",ylab=ylab,xlab=xlab,main=main)
+  if(length(y) >= 2) ylims <- c(mins[1]-sum(ranges[2:length(y)]),maxes[1])
+  if(length(y) < 2) ylims <- c(mins[1],maxes[1])
+  plot(NA, xlim=range(x), ylim=ylims, yaxt="n",ylab=ylab,xlab=xlab,main=main)
   abline(h=0,lty=3)
   if(all(is.na(col))) col<-rep(4,length(y))
   jagshelper::envelope(y[[1]], x=x, add=T,col=col[1],...=...)
   prettything <- pretty(c(maxes,mins),n=10)
   axis(side=2, at=prettything[prettything>mins[1] & prettything<maxes[1]],col=col[1],col.axis = col[1], las=2)
-  for(i in 2:length(y)) {
-    jagshelper::envelope(y[[i]]+maxes[1]-sum(ranges[1:(i-1)])-maxes[i], x=x, add=T,col=col[i],...=...)
-    abline(h=maxes[1]-sum(ranges[1:(i-1)])-maxes[i], lty=3)
-    axis(side=2, at=prettything[prettything>mins[i] & prettything<maxes[i]] + maxes[1]-sum(ranges[1:(i-1)])-maxes[i],
-         labels=prettything[prettything>mins[i] & prettything<maxes[i]],
-         col=col[i],col.axis = col[i], las=2)
+  if(length(y)>=2) {
+    for(i in 2:length(y)) {
+      jagshelper::envelope(y[[i]]+maxes[1]-sum(ranges[1:(i-1)])-maxes[i], x=x, add=T,col=col[i],...=...)
+      abline(h=maxes[1]-sum(ranges[1:(i-1)])-maxes[i], lty=3)
+      axis(side=2, at=prettything[prettything>mins[i] & prettything<maxes[i]] + maxes[1]-sum(ranges[1:(i-1)])-maxes[i],
+           labels=prettything[prettything>mins[i] & prettything<maxes[i]],
+           col=col[i],col.axis = col[i], las=2)
+    }
   }
 }
 # envelope_separate(list(tryit$sims.list$trend, tryit$sims.list$cycle, tryit$sims.list$ar1), x=xss,col=1:3)
@@ -566,12 +570,14 @@ plot_components <- function(jagsout, y=NULL, x=NULL, collapsecycle=FALSE, ...) {
 
   if(!is.null(y)) {
     totalfit <- ylist[[1]]
-    for(i in 2:length(ylist)) totalfit <- totalfit+ylist[[i]]
+    if(length(ylist)>=2) {
+      for(i in 2:length(ylist)) totalfit <- totalfit+ylist[[i]]
+    }
     ylist[[ilist+1]] <- matrix(y, byrow=T, nrow=nrow(totalfit), ncol=ncol(totalfit))-totalfit
     cols[ilist+1] <- 1
   }
 
-  envelope_separate(y=ylist, x=x, col=cols, ...=...)
+  envelope_separate(y=ylist, x=x, col=cols)#, ...=...)
   if(!is.null(y)) lines(x=x, y=y, col=adjustcolor(1,alpha.f=.5))
 }
 # components(jagsout=tryit, x=xss, y=y)
@@ -652,7 +658,9 @@ psd_components <- function(jagsout, y=NULL, x=NULL, alpha=0.01, collapsecycle=FA
 
   if(!is.null(y)) {
     totalfit <- ylist[[1]]
-    for(i in 2:length(ylist)) totalfit <- totalfit+ylist[[i]]
+    if(length(ylist)>=2) {
+      for(i in 2:length(ylist)) totalfit <- totalfit+ylist[[i]]
+    }
     ylist[[ilist+1]] <- matrix(y, byrow=T, nrow=nrow(totalfit), ncol=ncol(totalfit))-totalfit
     cols[ilist+1] <- 1
     axnames[ilist+1] <- "Irregular"
