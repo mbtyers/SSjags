@@ -204,7 +204,15 @@
 #' will be ignored if `AR1==FALSE`.  Defaults to `"dunif(0,1)"`
 #' @param sigeps_breaks An optional vector of structural breakpoints in the irregular
 #' component, which may be interpreted as different irregular standard deviations
-#' in different time periods.  Defaults to `NULL`, indicating no breaks.
+#' in different time periods.  Breakpoints should be expressed in the units of the
+#' time measurements supplied to argument `x`.  A single breakpoint may be used if
+#' there are two time periods, etc.  Defaults to `NULL`, indicating no breaks.
+#' @param sigxi_breaks An optional vector of structural breakpoints in the RATE
+#' DISTURBANCE component, which may be interpreted as different RATE
+#' DISTURBANCE standard deviations
+#' in different time periods.  Breakpoints should be expressed in the units of the
+#' time measurements supplied to argument `x`.  A single breakpoint may be used if
+#' there are two time periods, etc.  Defaults to `NULL`, indicating no breaks.
 #' @param normalizedRate Whether to express treat the RATE DISTURBANCES as occurring
 #' on the normalized time scale, as opposed to the data time scale.  If this is set
 #' to `TRUE`, the rates and rate disturbance standard deviation may be interpreted
@@ -266,6 +274,7 @@ runSS <- function(y, x=NULL, runmodel=T,
                   sig_psi_prior="dexp(0.2)",
                   phi_prior="dunif(0,1)",
                   sigeps_breaks=NULL,
+                  sigxi_breaks=NULL,
                   normalizedRate=TRUE) {
 
   if(is.null(ncores)) ncores <- parallel::detectCores()-1
@@ -280,6 +289,7 @@ runSS <- function(y, x=NULL, runmodel=T,
   isDetcycle <- !is.null(deterministicPeriods)
   isStochcycle <- !is.null(stochasticPeriods)
   isSigeps_split <- !is.null(sigeps_breaks)
+  isSigxi_split <- !is.null(sigxi_breaks)
 
   cat('model {
   for(i in 1:n) {
@@ -300,7 +310,9 @@ runSS <- function(y, x=NULL, runmodel=T,
   if(!normalizedRate) cat('
     trend[i] <- trend[i-1] + rate[i-1]*dt2[i]',file=tmp, append=T)
   cat('
-    rate[i] ~ dnorm(rate[i-1], tau_xi)
+    rate[i] ~ dnorm(rate[i-1], tau_xi',file=tmp, append=T)    ##### ypp[i] ~ dnorm(trend[i], tau_eps'
+  if(isSigxi_split) cat('[sigxi_split[i]]', file=tmp, append=T)
+  cat(')
 ',file=tmp, append=T)
   if(isAR1noise) cat('
     res[i] <- y[i]-fit[i]
@@ -372,24 +384,61 @@ runSS <- function(y, x=NULL, runmodel=T,
     sig_eps[i_eps]', file=tmp, append=T)
   if(!is.numeric(sig_eps_prior)) cat(' ~',sig_eps_prior, file=tmp, append=T)
   if(is.numeric(sig_eps_prior)) {
-    cat(' <- ',sig_eps_prior, file=tmp, append=T)
-    if(length(sig_eps_prior)>1) cat('[i_eps]', file=tmp, append=T)
+    if(length(sig_eps_prior)==1) cat(' <- ',sig_eps_prior, file=tmp, append=T)
+    if(length(sig_eps_prior)>1) cat(' <- sig_eps_prior_num[i_eps]', file=tmp, append=T)
+  }
+  if(!is.numeric(sig_eps_prior)) {
+    cat('
+    sig_eps_prior[i_eps] ~',sig_eps_prior, file=tmp, append=T)
   }
   cat('
   }
-  tau_xi <- pow(sig_xi, -2)
-  sig_xi', file=tmp, append=T)
+  # tau_eps <- pow(sig_eps, -2)
+  # sig_eps', file=tmp, append=T)
+  if(!is.numeric(sig_eps_prior)) cat(' ~', sig_eps_prior, file=tmp, append=T)
+  if(is.numeric(sig_eps_prior)) cat(' <-', sig_eps_prior, file=tmp, append=T)
+  if(!is.numeric(sig_eps_prior)) {
+    cat('
+  # sig_eps_prior ~', sig_eps_prior, file=tmp, append=T)
+  }
+  cat('
+
+  for(i_xi in 1:n_sigxi_split) {
+    tau_xi[i_xi] <- pow(sig_xi[i_xi], -2)
+    sig_xi[i_xi]', file=tmp, append=T)
+  if(!is.numeric(sig_xi_prior)) cat(' ~',sig_xi_prior, file=tmp, append=T)
+  if(is.numeric(sig_xi_prior)) {
+    if(length(sig_xi_prior)==1) cat(' <- ',sig_xi_prior, file=tmp, append=T)
+    if(length(sig_xi_prior)>1) cat(' <- sig_xi_prior_num[i_xi]', file=tmp, append=T)
+  }
+  if(!is.numeric(sig_xi_prior)) {
+    cat('
+    sig_xi_prior[i_xi] ~',sig_xi_prior, file=tmp, append=T)
+  }
+  cat('
+  }
+  # tau_xi <- pow(sig_xi, -2)
+  # sig_xi', file=tmp, append=T)
   if(!is.numeric(sig_xi_prior)) cat(' ~', sig_xi_prior, file=tmp, append=T)
   if(is.numeric(sig_xi_prior)) cat(' <-', sig_xi_prior, file=tmp, append=T)
+  if(!is.numeric(sig_xi_prior)) {
+    cat('
+  # sig_xi_prior ~', sig_xi_prior, file=tmp, append=T)
+  }
   if(isStochcycle) {
     cat('
+
   for(i_ps in 1:n_ps) {
     tau_omega[i_ps] <- pow(sig_omega[i_ps], -2)
     sig_omega[i_ps]', file=tmp, append=T)
     if(!is.numeric(sig_omega_prior)) cat(' ~',sig_omega_prior, file=tmp, append=T)
     if(is.numeric(sig_omega_prior)) {
-      cat(' <-',sig_omega_prior, file=tmp, append=T)
-      if(length(sig_omega_prior)>1) cat('[i_ps]', file=tmp, append=T)
+      if(length(sig_omega_prior)==1) cat(' <- ',sig_omega_prior, file=tmp, append=T)
+      if(length(sig_omega_prior)>1) cat(' <- sig_omega_prior_num[i_ps]', file=tmp, append=T)
+    }
+    if(!is.numeric(sig_omega_prior)) {
+      cat('
+    sig_omega_prior[i_ps] ~',sig_omega_prior, file=tmp, append=T)
     }
     cat('
   }', file=tmp, append=T)
@@ -410,12 +459,20 @@ runSS <- function(y, x=NULL, runmodel=T,
     if(is.numeric(sig_psi_prior)) {
       cat(' <-',sig_psi_prior, file=tmp, append=T)
     }
+    if(!is.numeric(sig_psi_prior)) {
+      cat('
+  sig_psi_prior ~',sig_psi_prior, file=tmp, append=T)
+    }
   }
   if(isAR1process | isAR1noise) {
     cat('
   phi', file=tmp, append=T)
     if(!is.numeric(phi_prior)) cat(' ~', phi_prior, file=tmp, append=T)
     if(is.numeric(phi_prior)) cat(' <-', phi_prior, file=tmp, append=T)
+    if(!is.numeric(phi_prior)) {
+      cat('
+  phi_prior ~',phi_prior, file=tmp, append=T)
+    }
   }
   cat('
 }
@@ -425,26 +482,39 @@ runSS <- function(y, x=NULL, runmodel=T,
     aschar <- readLines(tmp)
     for(i in 1:length(aschar)) cat(aschar[i],"\n")
   } else {
-    ## bundle data
-    if(is.null(x)) x <- 1:length(y)
-    dt1 <- c(NA, diff(x))
-    SS_data <- list(y=y,
-                    n=length(y),
-                    dt=dt1/mean(dt1,na.rm=T),
-                    dt2=dt1,
-                    tt=x-x[1], pi=pi, x=x)
-    SS_data$y[is.nan(SS_data$y)] <- NA
-    SS_data$trendprecinit <- 1/var(SS_data$y, na.rm=T)
-    SS_data$rateprecinit <- 1/var(diff(SS_data$y)/diff(SS_data$tt), na.rm=T)  ### make this normalized time step!!
-
-    SS_data$sigeps_split <- as.numeric(cut(SS_data$x, c(min(SS_data$x),sigeps_breaks,max(SS_data$x)), include.lowest=T))
-    SS_data$n_sigeps_split <- max(SS_data$sigeps_split)
-
-    if(is.numeric(phi_prior)) SS_data$phi_prior <- phi_prior
-    SS_data$p_s <- stochasticPeriods
-    SS_data$p_d <- deterministicPeriods
-    SS_data$n_ps <- length(stochasticPeriods)
-    SS_data$n_pd <- length(deterministicPeriods)
+    # ## bundle data
+    # if(is.null(x)) x <- 1:length(y)
+    # dt1 <- c(NA, diff(x))
+    # SS_data <- list(y=y,
+    #                 n=length(y),
+    #                 dt=dt1/mean(dt1,na.rm=T),
+    #                 dt2=dt1,
+    #                 tt=x-x[1], pi=pi, x=x)
+    # SS_data$y[is.nan(SS_data$y)] <- NA
+    # SS_data$trendprecinit <- 1/var(SS_data$y, na.rm=T)
+    # SS_data$rateprecinit <- 1/var(diff(SS_data$y)/diff(SS_data$tt), na.rm=T)  ### make this normalized time step!!
+    #
+    # SS_data$sigeps_split <- as.numeric(cut(SS_data$x, c(min(SS_data$x),sigeps_breaks,max(SS_data$x)), include.lowest=T))
+    # SS_data$n_sigeps_split <- max(SS_data$sigeps_split)
+    #
+    # if(is.numeric(phi_prior)) SS_data$phi_prior <- phi_prior
+    # SS_data$p_s <- stochasticPeriods
+    # SS_data$p_d <- deterministicPeriods
+    # SS_data$n_ps <- length(stochasticPeriods)
+    # SS_data$n_pd <- length(deterministicPeriods)
+    SS_data <- make_SS_data(y=y,
+                            x=x,
+                            stochasticPeriods=stochasticPeriods,
+                            deterministicPeriods=deterministicPeriods,
+                            AR1=AR1,
+                            sig_eps_prior=sig_eps_prior,
+                            sig_xi_prior=sig_xi_prior,
+                            sig_omega_prior=sig_omega_prior,
+                            sig_psi_prior=sig_psi_prior,
+                            phi_prior=phi_prior,
+                            sigeps_breaks=sigeps_breaks,
+                            sigxi_breaks=sigxi_breaks,
+                            normalizedRate=normalizedRate)
 
     ## run JAGS
     tstart <- Sys.time()
@@ -455,9 +525,11 @@ runSS <- function(y, x=NULL, runmodel=T,
                                                  "cycle","cycle_s","cycle_d",
                                                  "ar1",
                                                  "fit","ypp",
-                                                 "sig_eps","sig_xi","sig_omega",
-                                                 "sig_psi",   ### added sig_psi
-                                                 "phi"),
+                                                 "sig_eps","sig_eps_prior",
+                                                 "sig_xi", "sig_xi_prior",
+                                                 "sig_omega", "sig_omega_prior",
+                                                 "sig_psi", "sig_psi_prior",
+                                                 "phi", "phi_prior"),
                             n.chains=ncores, parallel=T, n.iter=niter,
                             n.burnin=niter/2, n.thin=niter/outlength/2)
 
@@ -473,7 +545,47 @@ runSS <- function(y, x=NULL, runmodel=T,
     return(jagsout)
   }
 }
-##
+
+make_SS_data <- function(y, x=NULL,
+                         stochasticPeriods=NULL, deterministicPeriods=NULL, AR1=FALSE,
+                         sig_eps_prior="dexp(0.2)",
+                         sig_xi_prior="dexp(0.2)",
+                         sig_omega_prior="dexp(0.2)",
+                         sig_psi_prior="dexp(0.2)",
+                         phi_prior="dunif(0,1)",
+                         sigeps_breaks=NULL,
+                         sigxi_breaks=NULL,
+                         normalizedRate=TRUE) {
+  ## bundle data
+  if(is.null(x)) x <- 1:length(y)
+  dt1 <- c(NA, diff(x))
+  SS_data <- list(y=y,
+                  n=length(y),
+                  dt=dt1/mean(dt1,na.rm=T),
+                  dt2=dt1,
+                  tt=x-x[1], pi=pi, x=x)
+  SS_data$y[is.nan(SS_data$y)] <- NA
+  SS_data$trendprecinit <- 1/var(SS_data$y, na.rm=T)
+  SS_data$rateprecinit <- 1/var(diff(SS_data$y)/diff(SS_data$tt), na.rm=T)  ### make this normalized time step!!
+
+  SS_data$sigeps_split <- as.numeric(cut(SS_data$x, c(min(SS_data$x),sigeps_breaks,max(SS_data$x)), include.lowest=T))
+  SS_data$n_sigeps_split <- max(SS_data$sigeps_split)
+
+  SS_data$sigxi_split <- as.numeric(cut(SS_data$x, c(min(SS_data$x),sigxi_breaks,max(SS_data$x)), include.lowest=T))
+  SS_data$n_sigxi_split <- max(SS_data$sigxi_split)
+
+  if(is.numeric(phi_prior)) SS_data$phi_prior <- phi_prior
+  SS_data$p_s <- stochasticPeriods
+  SS_data$p_d <- deterministicPeriods
+  SS_data$n_ps <- length(stochasticPeriods)
+  SS_data$n_pd <- length(deterministicPeriods)
+
+  if(is.numeric(sig_eps_prior) & length(sig_eps_prior)>1) SS_data$sig_eps_prior_num <- sig_eps_prior
+  if(is.numeric(sig_xi_prior) & length(sig_xi_prior)>1) SS_data$sig_xi_prior_num <- sig_xi_prior
+  if(is.numeric(sig_omega_prior) & length(sig_omega_prior)>1) SS_data$sig_omega_prior_num <- sig_omega_prior
+
+  return(SS_data)
+}
 
 envelope_separate <- function(y,x,col=NA,xlab="",ylab="",main="",...) {  # x is list of envelope things
   ranges <- sapply(y, function(x) diff(range(x,na.rm=T)))
