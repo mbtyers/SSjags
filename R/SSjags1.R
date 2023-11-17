@@ -473,7 +473,7 @@ runSS <- function(y, x=NULL, runmodel=T,
     return(jagsout)
   }
 }
-
+##
 
 envelope_separate <- function(y,x,col=NA,xlab="",ylab="",main="",...) {  # x is list of envelope things
   ranges <- sapply(y, function(x) diff(range(x,na.rm=T)))
