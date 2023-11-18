@@ -345,7 +345,7 @@ runSS <- function(y, x=NULL, runmodel=T,
   cat('  }
 
   # initialize trend and rate
-  trend[1] ~ dnorm(0, trendprecinit[1])  ###y[1]
+  trend[1] ~ dnorm(startpoint, trendprecinit[1])  ### 0
   rate[1] ~ dnorm(0, rateprecinit[1])
 ', file=tmp, append=T)
   if(isAR1noise) cat('
@@ -561,6 +561,7 @@ make_SS_data <- function(y, x=NULL,
   dt1 <- c(NA, diff(x))
   SS_data <- list(y=y,
                   n=length(y),
+                  startpoint=y[1],
                   dt=dt1/mean(dt1,na.rm=T),
                   dt2=dt1,
                   tt=x-x[1], pi=pi, x=x)
