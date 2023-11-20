@@ -265,17 +265,45 @@
 #'                niter = 100000)                 # number of MCMC iterations
 #' }
 #' @export
-runSS <- function(y, x=NULL, runmodel=T,
+runSS <- function(y, x=NULL, runmodel=TRUE, printmodel=TRUE,
                   niter=2000, ncores=NULL, parallel=TRUE,outlength=1000,
                   stochasticPeriods=NULL, deterministicPeriods=NULL, AR1=FALSE,
-                  sig_eps_prior="dexp(0.2)",
-                  sig_xi_prior="dexp(0.2)",
-                  sig_omega_prior="dexp(0.2)",
-                  sig_psi_prior="dexp(0.2)",
+                  sig_eps_prior=NULL,
+                  sig_xi_prior=NULL,
+                  sig_omega_prior=NULL,
+                  sig_psi_prior=NULL,
                   phi_prior="dunif(0,1)",
                   sigeps_breaks=NULL,
                   sigxi_breaks=NULL,
-                  normalizedRate=TRUE) {
+                  normalizedRate=FALSE) {
+
+  SS_data <- make_SS_data(y=y,
+                          x=x,
+                          stochasticPeriods=stochasticPeriods,
+                          deterministicPeriods=deterministicPeriods,
+                          AR1=AR1,
+                          sig_eps_prior=sig_eps_prior,
+                          sig_xi_prior=sig_xi_prior,
+                          sig_omega_prior=sig_omega_prior,
+                          sig_psi_prior=sig_psi_prior,
+                          phi_prior=phi_prior,
+                          sigeps_breaks=sigeps_breaks,
+                          sigxi_breaks=sigxi_breaks,
+                          normalizedRate=normalizedRate)
+
+  if(is.null(sig_eps_prior)) {
+    sig_eps_prior <- paste0("dexp(", 1/(10^ceiling(log10(1/sqrt(SS_data$trendprecinit)))), ")")
+  }
+  if(is.null(sig_omega_prior)) {
+    sig_omega_prior <- paste0("dexp(", 1/(10^ceiling(log10(1/sqrt(SS_data$trendprecinit)))), ")")
+  }
+  if(is.null(sig_psi_prior)) {
+    sig_psi_prior <- paste0("dexp(", 1/(10^ceiling(log10(1/sqrt(SS_data$trendprecinit)))), ")")
+  }
+
+  if(is.null(sig_xi_prior)) {
+    sig_xi_prior <- paste0("dexp(", 1/(10^ceiling(log10(1/sqrt(SS_data$rateprecinit)))), ")")
+  }
 
   if(is.null(ncores)) ncores <- parallel::detectCores()-1
   if(is.na(ncores)) stop("Unable to detect number of cores, please set ncores= manually.")
@@ -478,10 +506,18 @@ runSS <- function(y, x=NULL, runmodel=T,
 }
 ', file=tmp, append=T)
 
-  if(!runmodel) {
+  if(printmodel) {
     aschar <- readLines(tmp)
     for(i in 1:length(aschar)) cat(aschar[i],"\n")
-  } else {
+  }
+
+  # if(!runmodel) {
+  #   aschar <- readLines(tmp)
+  #   for(i in 1:length(aschar)) cat(aschar[i],"\n")
+  # } else {
+
+  if(runmodel) {
+
     # ## bundle data
     # if(is.null(x)) x <- 1:length(y)
     # dt1 <- c(NA, diff(x))
@@ -502,19 +538,6 @@ runSS <- function(y, x=NULL, runmodel=T,
     # SS_data$p_d <- deterministicPeriods
     # SS_data$n_ps <- length(stochasticPeriods)
     # SS_data$n_pd <- length(deterministicPeriods)
-    SS_data <- make_SS_data(y=y,
-                            x=x,
-                            stochasticPeriods=stochasticPeriods,
-                            deterministicPeriods=deterministicPeriods,
-                            AR1=AR1,
-                            sig_eps_prior=sig_eps_prior,
-                            sig_xi_prior=sig_xi_prior,
-                            sig_omega_prior=sig_omega_prior,
-                            sig_psi_prior=sig_psi_prior,
-                            phi_prior=phi_prior,
-                            sigeps_breaks=sigeps_breaks,
-                            sigxi_breaks=sigxi_breaks,
-                            normalizedRate=normalizedRate)
 
     ## run JAGS
     tstart <- Sys.time()
@@ -548,14 +571,14 @@ runSS <- function(y, x=NULL, runmodel=T,
 
 make_SS_data <- function(y, x=NULL,
                          stochasticPeriods=NULL, deterministicPeriods=NULL, AR1=FALSE,
-                         sig_eps_prior="dexp(0.2)",
-                         sig_xi_prior="dexp(0.2)",
-                         sig_omega_prior="dexp(0.2)",
-                         sig_psi_prior="dexp(0.2)",
+                         sig_eps_prior=NULL,
+                         sig_xi_prior=NULL,
+                         sig_omega_prior=NULL,
+                         sig_psi_prior=NULL,
                          phi_prior="dunif(0,1)",
                          sigeps_breaks=NULL,
                          sigxi_breaks=NULL,
-                         normalizedRate=TRUE) {
+                         normalizedRate=FALSE) {
   ## bundle data
   if(is.null(x)) x <- 1:length(y)
   dt1 <- c(NA, diff(x))
@@ -567,7 +590,12 @@ make_SS_data <- function(y, x=NULL,
                   tt=x-x[1], pi=pi, x=x)
   SS_data$y[is.nan(SS_data$y)] <- NA
   SS_data$trendprecinit <- 1/var(SS_data$y, na.rm=T)
-  SS_data$rateprecinit <- 1/var(diff(SS_data$y)/diff(SS_data$tt), na.rm=T)  ### make this normalized time step!!
+  # SS_data$rateprecinit <- 1/var(diff(SS_data$y)/diff(SS_data$tt), na.rm=T)  ### make this normalized time step!!
+  if(normalizedRate) {
+    SS_data$rateprecinit <- 1/var(diff(SS_data$y)/SS_data$dt[-1], na.rm=T)
+  } else {
+    SS_data$rateprecinit <- 1/var(diff(SS_data$y)/SS_data$dt2[-1], na.rm=T)
+  }
 
   SS_data$sigeps_split <- as.numeric(cut(SS_data$x, c(min(SS_data$x),sigeps_breaks,max(SS_data$x)), include.lowest=T))
   SS_data$n_sigeps_split <- max(SS_data$sigeps_split)
@@ -588,7 +616,7 @@ make_SS_data <- function(y, x=NULL,
   return(SS_data)
 }
 
-envelope_separate <- function(y,x,col=NA,xlab="",ylab="",main="",...) {  # x is list of envelope things
+envelope_separate <- function(y,x,col=NA,xlab="",ylab="",main="",...) {  # y is list of envelope things
   ranges <- sapply(y, function(x) diff(range(x,na.rm=T)))
   maxes <- sapply(y, function(x) max(apply(x,2,quantile, p=.95, na.rm=T),na.rm=T))
   mins <- sapply(y, function(x) min(apply(x,2,quantile, p=.05, na.rm=T),na.rm=T))
@@ -599,12 +627,18 @@ envelope_separate <- function(y,x,col=NA,xlab="",ylab="",main="",...) {  # x is 
   abline(h=0,lty=3)
   if(all(is.na(col))) col<-rep(4,length(y))
   jagshelper::envelope(y[[1]], x=x, add=T,col=col[1],...=...)
-  prettything <- pretty(c(maxes,mins),n=10)
-  axis(side=2, at=prettything[prettything>mins[1] & prettything<maxes[1]],col=col[1],col.axis = col[1], las=2)
+  prettything1 <- pretty(c(maxes[1],mins[1]),n=10)  # added [1]
+  axis(side=2, at=prettything1[prettything1>mins[1] & prettything1<maxes[1]],col=col[1],col.axis = col[1], las=2)
   if(length(y)>=2) {
     for(i in 2:length(y)) {
       jagshelper::envelope(y[[i]]+maxes[1]-sum(ranges[1:(i-1)])-maxes[i], x=x, add=T,col=col[i],...=...)
       abline(h=maxes[1]-sum(ranges[1:(i-1)])-maxes[i], lty=3)
+      # axis(side=2, at=prettything[prettything>mins[i] & prettything<maxes[i]] + maxes[1]-sum(ranges[1:(i-1)])-maxes[i],
+      #      labels=prettything[prettything>mins[i] & prettything<maxes[i]],
+      #      col=col[i],col.axis = col[i], las=2)
+      # prettything <- pretty(c(maxes[i], mins[i]), n=3)   # need to smarterize the 3 here
+      prettything <- c(seq(from=0, to=mins[i], by=-diff(prettything1[1:2])),
+                       seq(from=0, to=maxes[i], by=diff(prettything1[1:2])))
       axis(side=2, at=prettything[prettything>mins[i] & prettything<maxes[i]] + maxes[1]-sum(ranges[1:(i-1)])-maxes[i],
            labels=prettything[prettything>mins[i] & prettything<maxes[i]],
            col=col[i],col.axis = col[i], las=2)
