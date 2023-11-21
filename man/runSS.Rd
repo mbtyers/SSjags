@@ -7,7 +7,8 @@
 runSS(
   y,
   x = NULL,
-  runmodel = T,
+  runmodel = TRUE,
+  printmodel = TRUE,
   niter = 2000,
   ncores = NULL,
   parallel = TRUE,
@@ -15,13 +16,14 @@ runSS(
   stochasticPeriods = NULL,
   deterministicPeriods = NULL,
   AR1 = FALSE,
-  sig_eps_prior = "dexp(0.2)",
-  sig_xi_prior = "dexp(0.2)",
-  sig_omega_prior = "dexp(0.2)",
-  sig_psi_prior = "dexp(0.2)",
+  sig_eps_prior = NULL,
+  sig_xi_prior = NULL,
+  sig_omega_prior = NULL,
+  sig_psi_prior = NULL,
   phi_prior = "dunif(0,1)",
   sigeps_breaks = NULL,
-  normalizedRate = TRUE
+  sigxi_breaks = NULL,
+  normalizedRate = FALSE
 )
 }
 \arguments{
@@ -31,8 +33,10 @@ runSS(
 If the default \code{NULL} is used, the time measurements will be assumed to be
 equally-spaced integer values.}
 
-\item{runmodel}{Whether to run the model in 'JAGS'.  If \code{FALSE}, the function will
-instead print the model in 'JAGS' syntax to the console, providing a check to
+\item{runmodel}{Whether to run the model in 'JAGS', as the user may intend to
+print the model to the console instead.  Defaults to \code{TRUE}.}
+
+\item{printmodel}{Whether to print the model in 'JAGS' syntax to the console, providing a check to
 validate that the model is constructed as intended.  Defaults to \code{TRUE}.}
 
 \item{niter}{The number of MCMC iterations to run  Defaults to \code{2000}, which will
@@ -62,21 +66,29 @@ Defaults to \code{FALSE}.}
 
 \item{sig_eps_prior}{The prior used for the IRREGULAR standard deviation(s),
 expressed in 'JAGS' syntax.  Note that providing a number here will set this value
-to a constant, instead of treating it as a modeled quantity.  Defaults to \code{"dexp(0.2)"}}
+to a constant, instead of treating it as a modeled quantity.  If the default \code{NULL}
+is used, an exponential prior will be used (\code{dexp()} in 'JAGS' syntax), with
+a rate parameter determined by the approximate scale of the data.}
 
 \item{sig_xi_prior}{The prior used for the RATE DISTURBANCE standard deviation(s),
 expressed in 'JAGS' syntax.  Note that providing a number here will set this value
-to a constant, instead of treating it as a modeled quantity.  Defaults to \code{"dexp(0.2)"}}
+to a constant, instead of treating it as a modeled quantity.  If the default \code{NULL}
+is used, an exponential prior will be used (\code{dexp()} in 'JAGS' syntax), with
+a rate parameter determined by the approximate scale of the data.}
 
 \item{sig_omega_prior}{The prior used for the CYCLIC DISTURBANCE standard deviation(s),
 expressed in 'JAGS' syntax.  Note that providing a number here will set this value
 to a constant, instead of treating it as a modeled quantity.  Note that this argument
-will be ignored if \code{stochasticPeriods} is set to \code{NULL}.  Defaults to \code{"dexp(0.2)"}}
+will be ignored if \code{stochasticPeriods} is set to \code{NULL}.   If the default \code{NULL}
+is used, an exponential prior will be used (\code{dexp()} in 'JAGS' syntax), with
+a rate parameter determined by the approximate scale of the data.}
 
 \item{sig_psi_prior}{The prior used for the AR(1) PROCESS DISTURBANCE standard deviation,
 expressed in 'JAGS' syntax.  Note that providing a number here will set this value
 to a constant, instead of treating it as a modeled quantity.  Note that this argument
-will be ignored unless \code{AR1} is set to \code{process}.  Defaults to \code{"dexp(0.2)"}}
+will be ignored unless \code{AR1} is set to \code{process}.  If the default \code{NULL}
+is used, an exponential prior will be used (\code{dexp()} in 'JAGS' syntax), with
+a rate parameter determined by the approximate scale of the data.}
 
 \item{phi_prior}{The prior used for the AR(1) autoregressive parameter,
 expressed in 'JAGS' syntax.  Note that providing a number here will set this value
@@ -85,7 +97,16 @@ will be ignored if \code{AR1==FALSE}.  Defaults to \code{"dunif(0,1)"}}
 
 \item{sigeps_breaks}{An optional vector of structural breakpoints in the irregular
 component, which may be interpreted as different irregular standard deviations
-in different time periods.  Defaults to \code{NULL}, indicating no breaks.}
+in different time periods.  Breakpoints should be expressed in the units of the
+time measurements supplied to argument \code{x}.  A single breakpoint may be used if
+there are two time periods, etc.  Defaults to \code{NULL}, indicating no breaks.}
+
+\item{sigxi_breaks}{An optional vector of structural breakpoints in the RATE
+DISTURBANCE component, which may be interpreted as different RATE
+DISTURBANCE standard deviations
+in different time periods.  Breakpoints should be expressed in the units of the
+time measurements supplied to argument \code{x}.  A single breakpoint may be used if
+there are two time periods, etc.  Defaults to \code{NULL}, indicating no breaks.}
 
 \item{normalizedRate}{Whether to express treat the RATE DISTURBANCES as occurring
 on the normalized time scale, as opposed to the data time scale.  If this is set
@@ -94,7 +115,7 @@ as rate per normalized time step; If this is set
 to \code{FALSE}, the rates and rate disturbance standard deviation may be interpreted
 as rate per unit time with respect to the input data units.  This functionality
 is retained in order to facilitate comparison with output from other software.
-Defaults to \code{TRUE}.}
+Defaults to \code{FALSE}.}
 }
 \value{
 An output object from \code{jagsUI::jags()}.  This will have the following
@@ -117,8 +138,10 @@ the irregular component \eqn{\epsilon_i}
 \item \strong{ypp: vector of length n_t} Posterior-predicted value at each epoch \eqn{i},
 equivalent to sampling a predicted value for each MCMC sample given that sample's
 values of fit and irregular standard deviation
-\item \strong{sig_eps: single value} Irregular standard deviation \eqn{\sigma_\epsilon}
-\item \strong{sig_xi: single value} Rate disturbance standard deviation \eqn{\sigma_\xi}
+\item \strong{sig_eps: vector} Irregular standard deviations \eqn{\sigma_\epsilon}
+for each time period (if there are structural breaks, otherwise a single parameter)
+\item \strong{sig_xi: vector} Rate disturbance standard deviations \eqn{\sigma_\xi}
+for each time period (if there are structural breaks, otherwise a single parameter)
 \item \strong{sig_omega (possibly): vector of length n_s} Cycle disturbance standard
 deviations \eqn{\sigma_{\omega,j}} for each stochastic period \eqn{j}
 \item \strong{phi (possibly): single value} Autoregressive parameter \eqn{\phi}
@@ -129,7 +152,7 @@ Automatically constructs and optionally runs a State-Space time series
 model, given an input time series and optional model components.
 
 This is a wrapper function, which constructs a model using the JAGS syntax according
-to model arguments provided by the user.  This is written to a temporary text file,
+to model arguments provided by the user.  The model is written to a temporary text file,
 which is called by 'JAGS' using \code{jagsUI::jags()}.
 \subsection{Data model & state model}{
 
@@ -292,7 +315,7 @@ jagsout <- runSS(y = SS_data$y,                # vector of observations
                x = SS_data$x,                  # associated time measurements
                stochasticPeriods = c(1, 0.5),  # stochastic cycle periods
                niter = 10000,                  # number of MCMC iterations
-               runmodel = F)                   # print to console
+               runmodel = FALSE)               # just print to console
 
 \dontrun{
 jagsout <- runSS(y = SS_data$y,                # vector of observations

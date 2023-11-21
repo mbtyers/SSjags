@@ -1,8 +1,8 @@
 Package: SSjags
 Type: Package
 Title: Construct and Fit a State-Space Model in 'JAGS' through 'jagsUI'
-Version: 0.1.1
-Date: 2022-11-02
+Version: 0.1.2
+Date: 2023-11-20
 Author: Matt Tyers [aut, cre]
 Maintainer: Matt Tyers <matttyersstat@gmail.com>
 Description: The main functionality is a wrapper function that uses user input
@@ -20,7 +20,7 @@ Suggests:
     rmarkdown
 VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.1
+RoxygenNote: 7.2.3
 Depends: 
     R (>= 2.10),
     jagshelper,

@@ -3,7 +3,7 @@
 #' model, given an input time series and optional model components.
 #'
 #' This is a wrapper function, which constructs a model using the JAGS syntax according
-#' to model arguments provided by the user.  This is written to a temporary text file,
+#' to model arguments provided by the user.  The model is written to a temporary text file,
 #' which is called by 'JAGS' using `jagsUI::jags()`.
 #'
 #' ## Data model & state model
@@ -163,8 +163,9 @@
 #' @param x The corresponding time measurements, expressed as a numeric vector.
 #' If the default `NULL` is used, the time measurements will be assumed to be
 #' equally-spaced integer values.
-#' @param runmodel Whether to run the model in 'JAGS'.  If `FALSE`, the function will
-#' instead print the model in 'JAGS' syntax to the console, providing a check to
+#' @param runmodel Whether to run the model in 'JAGS', as the user may intend to
+#' print the model to the console instead.  Defaults to `TRUE`.
+#' @param printmodel Whether to print the model in 'JAGS' syntax to the console, providing a check to
 #' validate that the model is constructed as intended.  Defaults to `TRUE`.
 #' @param niter The number of MCMC iterations to run  Defaults to `2000`, which will
 #' almost certainly not be enough to achieve convergence! However, this default value
@@ -186,25 +187,41 @@
 #' Defaults to `FALSE`.
 #' @param sig_eps_prior The prior used for the IRREGULAR standard deviation(s),
 #' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
-#' to a constant, instead of treating it as a modeled quantity.  Defaults to `"dexp(0.2)"`
+#' to a constant, instead of treating it as a modeled quantity.  If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
 #' @param sig_xi_prior The prior used for the RATE DISTURBANCE standard deviation(s),
 #' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
-#' to a constant, instead of treating it as a modeled quantity.  Defaults to `"dexp(0.2)"`
+#' to a constant, instead of treating it as a modeled quantity.  If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
 #' @param sig_omega_prior The prior used for the CYCLIC DISTURBANCE standard deviation(s),
 #' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
 #' to a constant, instead of treating it as a modeled quantity.  Note that this argument
-#' will be ignored if `stochasticPeriods` is set to `NULL`.  Defaults to `"dexp(0.2)"`
+#' will be ignored if `stochasticPeriods` is set to `NULL`.   If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
 #' @param sig_psi_prior The prior used for the AR(1) PROCESS DISTURBANCE standard deviation,
 #' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
 #' to a constant, instead of treating it as a modeled quantity.  Note that this argument
-#' will be ignored unless `AR1` is set to `process`.  Defaults to `"dexp(0.2)"`
+#' will be ignored unless `AR1` is set to `process`.  If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
 #' @param phi_prior The prior used for the AR(1) autoregressive parameter,
 #' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
 #' to a constant, instead of treating it as a modeled quantity.  Note that this argument
 #' will be ignored if `AR1==FALSE`.  Defaults to `"dunif(0,1)"`
 #' @param sigeps_breaks An optional vector of structural breakpoints in the irregular
 #' component, which may be interpreted as different irregular standard deviations
-#' in different time periods.  Defaults to `NULL`, indicating no breaks.
+#' in different time periods.  Breakpoints should be expressed in the units of the
+#' time measurements supplied to argument `x`.  A single breakpoint may be used if
+#' there are two time periods, etc.  Defaults to `NULL`, indicating no breaks.
+#' @param sigxi_breaks An optional vector of structural breakpoints in the RATE
+#' DISTURBANCE component, which may be interpreted as different RATE
+#' DISTURBANCE standard deviations
+#' in different time periods.  Breakpoints should be expressed in the units of the
+#' time measurements supplied to argument `x`.  A single breakpoint may be used if
+#' there are two time periods, etc.  Defaults to `NULL`, indicating no breaks.
 #' @param normalizedRate Whether to express treat the RATE DISTURBANCES as occurring
 #' on the normalized time scale, as opposed to the data time scale.  If this is set
 #' to `TRUE`, the rates and rate disturbance standard deviation may be interpreted
@@ -212,7 +229,7 @@
 #' to `FALSE`, the rates and rate disturbance standard deviation may be interpreted
 #' as rate per unit time with respect to the input data units.  This functionality
 #' is retained in order to facilitate comparison with output from other software.
-#' Defaults to `TRUE`.
+#' Defaults to `FALSE`.
 #' @return An output object from `jagsUI::jags()`.  This will have the following
 #' parameters, in which n_t denotes the length of the input time series and
 #' n_s and n_d denote the number of stochastic and deterministic cycle periods, respectively:
@@ -232,8 +249,10 @@
 #' * **ypp: vector of length n_t** Posterior-predicted value at each epoch \eqn{i},
 #' equivalent to sampling a predicted value for each MCMC sample given that sample's
 #' values of fit and irregular standard deviation
-#' * **sig_eps: single value** Irregular standard deviation \eqn{\sigma_\epsilon}
-#' * **sig_xi: single value** Rate disturbance standard deviation \eqn{\sigma_\xi}
+#' * **sig_eps: vector** Irregular standard deviations \eqn{\sigma_\epsilon}
+#' for each time period (if there are structural breaks, otherwise a single parameter)
+#' * **sig_xi: vector** Rate disturbance standard deviations \eqn{\sigma_\xi}
+#' for each time period (if there are structural breaks, otherwise a single parameter)
 #' * **sig_omega (possibly): vector of length n_s** Cycle disturbance standard
 #' deviations \eqn{\sigma_{\omega,j}} for each stochastic period \eqn{j}
 #' * **phi (possibly): single value** Autoregressive parameter \eqn{\phi}
@@ -248,7 +267,7 @@
 #'                x = SS_data$x,                  # associated time measurements
 #'                stochasticPeriods = c(1, 0.5),  # stochastic cycle periods
 #'                niter = 10000,                  # number of MCMC iterations
-#'                runmodel = F)                   # print to console
+#'                runmodel = FALSE)               # just print to console
 #'
 #' \dontrun{
 #' jagsout <- runSS(y = SS_data$y,                # vector of observations
@@ -257,16 +276,45 @@
 #'                niter = 100000)                 # number of MCMC iterations
 #' }
 #' @export
-runSS <- function(y, x=NULL, runmodel=T,
+runSS <- function(y, x=NULL, runmodel=TRUE, printmodel=TRUE,
                   niter=2000, ncores=NULL, parallel=TRUE,outlength=1000,
                   stochasticPeriods=NULL, deterministicPeriods=NULL, AR1=FALSE,
-                  sig_eps_prior="dexp(0.2)",
-                  sig_xi_prior="dexp(0.2)",
-                  sig_omega_prior="dexp(0.2)",
-                  sig_psi_prior="dexp(0.2)",
+                  sig_eps_prior=NULL,
+                  sig_xi_prior=NULL,
+                  sig_omega_prior=NULL,
+                  sig_psi_prior=NULL,
                   phi_prior="dunif(0,1)",
                   sigeps_breaks=NULL,
-                  normalizedRate=TRUE) {
+                  sigxi_breaks=NULL,
+                  normalizedRate=FALSE) {
+
+  SS_data <- make_SS_data(y=y,
+                          x=x,
+                          stochasticPeriods=stochasticPeriods,
+                          deterministicPeriods=deterministicPeriods,
+                          AR1=AR1,
+                          sig_eps_prior=sig_eps_prior,
+                          sig_xi_prior=sig_xi_prior,
+                          sig_omega_prior=sig_omega_prior,
+                          sig_psi_prior=sig_psi_prior,
+                          phi_prior=phi_prior,
+                          sigeps_breaks=sigeps_breaks,
+                          sigxi_breaks=sigxi_breaks,
+                          normalizedRate=normalizedRate)
+
+  if(is.null(sig_eps_prior)) {
+    sig_eps_prior <- paste0("dexp(", 1/(10^ceiling(log10(1/sqrt(SS_data$trendprecinit)))), ")")
+  }
+  if(is.null(sig_omega_prior)) {
+    sig_omega_prior <- paste0("dexp(", 1/(10^ceiling(log10(1/sqrt(SS_data$rateprecinit)))), ")")
+  }
+  if(is.null(sig_psi_prior)) {
+    sig_psi_prior <- paste0("dexp(", 1/(10^ceiling(log10(1/sqrt(SS_data$trendprecinit)))), ")")
+  }
+
+  if(is.null(sig_xi_prior)) {
+    sig_xi_prior <- paste0("dexp(", 1/(10^ceiling(log10(1/sqrt(SS_data$rateprecinit)))), ")")
+  }
 
   if(is.null(ncores)) ncores <- parallel::detectCores()-1
   if(is.na(ncores)) stop("Unable to detect number of cores, please set ncores= manually.")
@@ -280,6 +328,7 @@ runSS <- function(y, x=NULL, runmodel=T,
   isDetcycle <- !is.null(deterministicPeriods)
   isStochcycle <- !is.null(stochasticPeriods)
   isSigeps_split <- !is.null(sigeps_breaks)
+  isSigxi_split <- !is.null(sigxi_breaks)
 
   cat('model {
   for(i in 1:n) {
@@ -300,7 +349,9 @@ runSS <- function(y, x=NULL, runmodel=T,
   if(!normalizedRate) cat('
     trend[i] <- trend[i-1] + rate[i-1]*dt2[i]',file=tmp, append=T)
   cat('
-    rate[i] ~ dnorm(rate[i-1], tau_xi)
+    rate[i] ~ dnorm(rate[i-1], tau_xi',file=tmp, append=T)    ##### ypp[i] ~ dnorm(trend[i], tau_eps'
+  if(isSigxi_split) cat('[sigxi_split[i]]', file=tmp, append=T)
+  cat(')
 ',file=tmp, append=T)
   if(isAR1noise) cat('
     res[i] <- y[i]-fit[i]
@@ -333,7 +384,7 @@ runSS <- function(y, x=NULL, runmodel=T,
   cat('  }
 
   # initialize trend and rate
-  trend[1] ~ dnorm(0, trendprecinit[1])  ###y[1]
+  trend[1] ~ dnorm(startpoint, trendprecinit[1])  ### 0
   rate[1] ~ dnorm(0, rateprecinit[1])
 ', file=tmp, append=T)
   if(isAR1noise) cat('
@@ -372,24 +423,61 @@ runSS <- function(y, x=NULL, runmodel=T,
     sig_eps[i_eps]', file=tmp, append=T)
   if(!is.numeric(sig_eps_prior)) cat(' ~',sig_eps_prior, file=tmp, append=T)
   if(is.numeric(sig_eps_prior)) {
-    cat(' <- ',sig_eps_prior, file=tmp, append=T)
-    if(length(sig_eps_prior)>1) cat('[i_eps]', file=tmp, append=T)
+    if(length(sig_eps_prior)==1) cat(' <- ',sig_eps_prior, file=tmp, append=T)
+    if(length(sig_eps_prior)>1) cat(' <- sig_eps_prior_num[i_eps]', file=tmp, append=T)
+  }
+  if(!is.numeric(sig_eps_prior)) {
+    cat('
+    sig_eps_prior[i_eps] ~',sig_eps_prior, file=tmp, append=T)
   }
   cat('
   }
-  tau_xi <- pow(sig_xi, -2)
-  sig_xi', file=tmp, append=T)
+  # tau_eps <- pow(sig_eps, -2)
+  # sig_eps', file=tmp, append=T)
+  if(!is.numeric(sig_eps_prior)) cat(' ~', sig_eps_prior, file=tmp, append=T)
+  if(is.numeric(sig_eps_prior)) cat(' <-', sig_eps_prior, file=tmp, append=T)
+  if(!is.numeric(sig_eps_prior)) {
+    cat('
+  # sig_eps_prior ~', sig_eps_prior, file=tmp, append=T)
+  }
+  cat('
+
+  for(i_xi in 1:n_sigxi_split) {
+    tau_xi[i_xi] <- pow(sig_xi[i_xi], -2)
+    sig_xi[i_xi]', file=tmp, append=T)
+  if(!is.numeric(sig_xi_prior)) cat(' ~',sig_xi_prior, file=tmp, append=T)
+  if(is.numeric(sig_xi_prior)) {
+    if(length(sig_xi_prior)==1) cat(' <- ',sig_xi_prior, file=tmp, append=T)
+    if(length(sig_xi_prior)>1) cat(' <- sig_xi_prior_num[i_xi]', file=tmp, append=T)
+  }
+  if(!is.numeric(sig_xi_prior)) {
+    cat('
+    sig_xi_prior[i_xi] ~',sig_xi_prior, file=tmp, append=T)
+  }
+  cat('
+  }
+  # tau_xi <- pow(sig_xi, -2)
+  # sig_xi', file=tmp, append=T)
   if(!is.numeric(sig_xi_prior)) cat(' ~', sig_xi_prior, file=tmp, append=T)
   if(is.numeric(sig_xi_prior)) cat(' <-', sig_xi_prior, file=tmp, append=T)
+  if(!is.numeric(sig_xi_prior)) {
+    cat('
+  # sig_xi_prior ~', sig_xi_prior, file=tmp, append=T)
+  }
   if(isStochcycle) {
     cat('
+
   for(i_ps in 1:n_ps) {
     tau_omega[i_ps] <- pow(sig_omega[i_ps], -2)
     sig_omega[i_ps]', file=tmp, append=T)
     if(!is.numeric(sig_omega_prior)) cat(' ~',sig_omega_prior, file=tmp, append=T)
     if(is.numeric(sig_omega_prior)) {
-      cat(' <-',sig_omega_prior, file=tmp, append=T)
-      if(length(sig_omega_prior)>1) cat('[i_ps]', file=tmp, append=T)
+      if(length(sig_omega_prior)==1) cat(' <- ',sig_omega_prior, file=tmp, append=T)
+      if(length(sig_omega_prior)>1) cat(' <- sig_omega_prior_num[i_ps]', file=tmp, append=T)
+    }
+    if(!is.numeric(sig_omega_prior)) {
+      cat('
+    sig_omega_prior[i_ps] ~',sig_omega_prior, file=tmp, append=T)
     }
     cat('
   }', file=tmp, append=T)
@@ -410,41 +498,57 @@ runSS <- function(y, x=NULL, runmodel=T,
     if(is.numeric(sig_psi_prior)) {
       cat(' <-',sig_psi_prior, file=tmp, append=T)
     }
+    if(!is.numeric(sig_psi_prior)) {
+      cat('
+  sig_psi_prior ~',sig_psi_prior, file=tmp, append=T)
+    }
   }
   if(isAR1process | isAR1noise) {
     cat('
   phi', file=tmp, append=T)
     if(!is.numeric(phi_prior)) cat(' ~', phi_prior, file=tmp, append=T)
     if(is.numeric(phi_prior)) cat(' <-', phi_prior, file=tmp, append=T)
+    if(!is.numeric(phi_prior)) {
+      cat('
+  phi_prior ~',phi_prior, file=tmp, append=T)
+    }
   }
   cat('
 }
 ', file=tmp, append=T)
 
-  if(!runmodel) {
+  if(printmodel) {
     aschar <- readLines(tmp)
     for(i in 1:length(aschar)) cat(aschar[i],"\n")
-  } else {
-    ## bundle data
-    if(is.null(x)) x <- 1:length(y)
-    dt1 <- c(NA, diff(x))
-    SS_data <- list(y=y,
-                    n=length(y),
-                    dt=dt1/mean(dt1,na.rm=T),
-                    dt2=dt1,
-                    tt=x-x[1], pi=pi, x=x)
-    SS_data$y[is.nan(SS_data$y)] <- NA
-    SS_data$trendprecinit <- 1/var(SS_data$y, na.rm=T)
-    SS_data$rateprecinit <- 1/var(diff(SS_data$y)/diff(SS_data$tt), na.rm=T)  ### make this normalized time step!!
+  }
 
-    SS_data$sigeps_split <- as.numeric(cut(SS_data$x, c(min(SS_data$x),sigeps_breaks,max(SS_data$x)), include.lowest=T))
-    SS_data$n_sigeps_split <- max(SS_data$sigeps_split)
+  # if(!runmodel) {
+  #   aschar <- readLines(tmp)
+  #   for(i in 1:length(aschar)) cat(aschar[i],"\n")
+  # } else {
 
-    if(is.numeric(phi_prior)) SS_data$phi_prior <- phi_prior
-    SS_data$p_s <- stochasticPeriods
-    SS_data$p_d <- deterministicPeriods
-    SS_data$n_ps <- length(stochasticPeriods)
-    SS_data$n_pd <- length(deterministicPeriods)
+  if(runmodel) {
+
+    # ## bundle data
+    # if(is.null(x)) x <- 1:length(y)
+    # dt1 <- c(NA, diff(x))
+    # SS_data <- list(y=y,
+    #                 n=length(y),
+    #                 dt=dt1/mean(dt1,na.rm=T),
+    #                 dt2=dt1,
+    #                 tt=x-x[1], pi=pi, x=x)
+    # SS_data$y[is.nan(SS_data$y)] <- NA
+    # SS_data$trendprecinit <- 1/var(SS_data$y, na.rm=T)
+    # SS_data$rateprecinit <- 1/var(diff(SS_data$y)/diff(SS_data$tt), na.rm=T)  ### make this normalized time step!!
+    #
+    # SS_data$sigeps_split <- as.numeric(cut(SS_data$x, c(min(SS_data$x),sigeps_breaks,max(SS_data$x)), include.lowest=T))
+    # SS_data$n_sigeps_split <- max(SS_data$sigeps_split)
+    #
+    # if(is.numeric(phi_prior)) SS_data$phi_prior <- phi_prior
+    # SS_data$p_s <- stochasticPeriods
+    # SS_data$p_d <- deterministicPeriods
+    # SS_data$n_ps <- length(stochasticPeriods)
+    # SS_data$n_pd <- length(deterministicPeriods)
 
     ## run JAGS
     tstart <- Sys.time()
@@ -455,9 +559,11 @@ runSS <- function(y, x=NULL, runmodel=T,
                                                  "cycle","cycle_s","cycle_d",
                                                  "ar1",
                                                  "fit","ypp",
-                                                 "sig_eps","sig_xi","sig_omega",
-                                                 "sig_psi",   ### added sig_psi
-                                                 "phi"),
+                                                 "sig_eps","sig_eps_prior",
+                                                 "sig_xi", "sig_xi_prior",
+                                                 "sig_omega", "sig_omega_prior",
+                                                 "sig_psi", "sig_psi_prior",
+                                                 "phi", "phi_prior"),
                             n.chains=ncores, parallel=T, n.iter=niter,
                             n.burnin=niter/2, n.thin=niter/outlength/2)
 
@@ -475,7 +581,145 @@ runSS <- function(y, x=NULL, runmodel=T,
 }
 
 
-envelope_separate <- function(y,x,col=NA,xlab="",ylab="",main="",...) {  # x is list of envelope things
+
+
+#' Prepare the Data for a State-Space Model
+#' @description Prepares a data object to be used by \link{runSS}, also called
+#' internally within \link{runSS}.  The principal utility of
+#'
+#' The user may choose to use the model created by \link{runSS} as a starting
+#' point and make adjustments manually, in which case having the processed data
+#' at hand may make such adjustments more straightforward.  Additionally, it may
+#' be useful to have a check that the appropriate data is being used by the model.
+#'
+#' @param y The input time series, expressed as a numeric vector.
+#' @param x The corresponding time measurements, expressed as a numeric vector.
+#' If the default `NULL` is used, the time measurements will be assumed to be
+#' equally-spaced integer values.
+#' @param stochasticPeriods An optional vector of stochastic cycle periods, in
+#' units of time.  Defaults to `NULL`, indicating no stochastic cycle present.
+#' @param deterministicPeriods An optional vector of deterministic cycle periods, in
+#' units of time.  Defaults to `NULL`, indicating no deterministic cycle present.
+#' @param AR1 Whether to include an AR(1) autoregressive process.
+#' Defaults to `FALSE`.
+#' @param sig_eps_prior The prior used for the IRREGULAR standard deviation(s),
+#' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
+#' to a constant, instead of treating it as a modeled quantity.  If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
+#' @param sig_xi_prior The prior used for the RATE DISTURBANCE standard deviation(s),
+#' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
+#' to a constant, instead of treating it as a modeled quantity.  If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
+#' @param sig_omega_prior The prior used for the CYCLIC DISTURBANCE standard deviation(s),
+#' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
+#' to a constant, instead of treating it as a modeled quantity.  Note that this argument
+#' will be ignored if `stochasticPeriods` is set to `NULL`.   If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
+#' @param sig_psi_prior The prior used for the AR(1) PROCESS DISTURBANCE standard deviation,
+#' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
+#' to a constant, instead of treating it as a modeled quantity.  Note that this argument
+#' will be ignored unless `AR1` is set to `process`.  If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
+#' @param phi_prior The prior used for the AR(1) autoregressive parameter,
+#' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
+#' to a constant, instead of treating it as a modeled quantity.  Note that this argument
+#' will be ignored if `AR1==FALSE`.  Defaults to `"dunif(0,1)"`
+#' @param sigeps_breaks An optional vector of structural breakpoints in the irregular
+#' component, which may be interpreted as different irregular standard deviations
+#' in different time periods.  Breakpoints should be expressed in the units of the
+#' time measurements supplied to argument `x`.  A single breakpoint may be used if
+#' there are two time periods, etc.  Defaults to `NULL`, indicating no breaks.
+#' @param sigxi_breaks An optional vector of structural breakpoints in the RATE
+#' DISTURBANCE component, which may be interpreted as different RATE
+#' DISTURBANCE standard deviations
+#' in different time periods.  Breakpoints should be expressed in the units of the
+#' time measurements supplied to argument `x`.  A single breakpoint may be used if
+#' there are two time periods, etc.  Defaults to `NULL`, indicating no breaks.
+#' @param normalizedRate Whether to express treat the RATE DISTURBANCES as occurring
+#' on the normalized time scale, as opposed to the data time scale.  If this is set
+#' to `TRUE`, the rates and rate disturbance standard deviation may be interpreted
+#' as rate per normalized time step; If this is set
+#' to `FALSE`, the rates and rate disturbance standard deviation may be interpreted
+#' as rate per unit time with respect to the input data units.  This functionality
+#' is retained in order to facilitate comparison with output from other software.
+#' Defaults to `TRUE`.
+#' @return A list with the following components:
+#' * `y`: The input time series, expressed as a numeric vector
+#' * `n`: The length of the input time series
+#' * `startpoint`: The starting value of the time series
+#' * `trendprecinit`: The prior precision used for the initial value of trend
+#' * `rateprecinit`: The prior precision used for the initial value of rate
+#' * `sigeps_split`: A vector corresponding to the index of irregular standard deviation
+#' parameter used for each time series element
+#' * `n_sigeps_split`: The number of irregular standard devation parameters to estimate
+#' * `sigxi_split`: A vector corresponding to the index of rate disturbance standard deviation
+#' parameter used for each time series element
+#' * `n_sigxi_split`: The number of rate disturbance standard devation parameters to estimate
+#' * `phi_prior`: The prior used for autoregressive parameter phi
+#' * `p_s`: Stochastic periods, expressed as a numeric vector
+#' * `n_ps`: Number of stochastic periods
+#' * `p_d`: Deterministic periods, expressed as a numeric vector
+#' * `n_pd`: Number of deterministic periods
+#' * `sig_eps_prior_num`: Irregular standard deviation, if a constant (or vector of constants) is used
+#' * `sig_xi_prior_num`: Rate disturbance standard deviation, if a constant (or vector of constants) is used
+#' * `sig_eps_prior_num`: Cycle standard deviation, if a constant (or vector of constants) is used
+#' @author Matt Tyers
+#' @examples
+#' make_SS_data(y = SS_data$y,                   # vector of observations
+#'              x = SS_data$x,                   # associated time measurements
+#'              stochasticPeriods = c(1, 0.5)),  # stochastic cycle periods
+#' @export
+make_SS_data <- function(y, x=NULL,
+                         stochasticPeriods=NULL, deterministicPeriods=NULL, AR1=FALSE,
+                         sig_eps_prior=NULL,
+                         sig_xi_prior=NULL,
+                         sig_omega_prior=NULL,
+                         sig_psi_prior=NULL,
+                         phi_prior="dunif(0,1)",
+                         sigeps_breaks=NULL,
+                         sigxi_breaks=NULL,
+                         normalizedRate=FALSE) {
+  ## bundle data
+  if(is.null(x)) x <- 1:length(y)
+  dt1 <- c(NA, diff(x))
+  SS_data <- list(y=y,
+                  n=length(y),
+                  startpoint=y[1],
+                  dt=dt1/mean(dt1,na.rm=T),
+                  dt2=dt1,
+                  tt=x-x[1], pi=pi, x=x)
+  SS_data$y[is.nan(SS_data$y)] <- NA
+  SS_data$trendprecinit <- 1/var(SS_data$y, na.rm=T)
+  if(normalizedRate) {
+    SS_data$rateprecinit <- 1/var(diff(SS_data$y)/SS_data$dt[-1], na.rm=T)
+  } else {
+    SS_data$rateprecinit <- 1/var(diff(SS_data$y)/SS_data$dt2[-1], na.rm=T)
+  }
+
+  SS_data$sigeps_split <- as.numeric(cut(SS_data$x, c(min(SS_data$x),sigeps_breaks,max(SS_data$x)), include.lowest=T))
+  SS_data$n_sigeps_split <- max(SS_data$sigeps_split)
+
+  SS_data$sigxi_split <- as.numeric(cut(SS_data$x, c(min(SS_data$x),sigxi_breaks,max(SS_data$x)), include.lowest=T))
+  SS_data$n_sigxi_split <- max(SS_data$sigxi_split)
+
+  if(is.numeric(phi_prior)) SS_data$phi_prior <- phi_prior
+  SS_data$p_s <- stochasticPeriods
+  SS_data$p_d <- deterministicPeriods
+  SS_data$n_ps <- length(stochasticPeriods)
+  SS_data$n_pd <- length(deterministicPeriods)
+
+  if(is.numeric(sig_eps_prior) & length(sig_eps_prior)>1) SS_data$sig_eps_prior_num <- sig_eps_prior
+  if(is.numeric(sig_xi_prior) & length(sig_xi_prior)>1) SS_data$sig_xi_prior_num <- sig_xi_prior
+  if(is.numeric(sig_omega_prior) & length(sig_omega_prior)>1) SS_data$sig_omega_prior_num <- sig_omega_prior
+
+  return(SS_data)
+}
+
+envelope_separate <- function(y,x,col=NA,xlab="",ylab="",main="",...) {  # y is list of envelope things
   ranges <- sapply(y, function(x) diff(range(x,na.rm=T)))
   maxes <- sapply(y, function(x) max(apply(x,2,quantile, p=.95, na.rm=T),na.rm=T))
   mins <- sapply(y, function(x) min(apply(x,2,quantile, p=.05, na.rm=T),na.rm=T))
@@ -486,12 +730,18 @@ envelope_separate <- function(y,x,col=NA,xlab="",ylab="",main="",...) {  # x is 
   abline(h=0,lty=3)
   if(all(is.na(col))) col<-rep(4,length(y))
   jagshelper::envelope(y[[1]], x=x, add=T,col=col[1],...=...)
-  prettything <- pretty(c(maxes,mins),n=10)
-  axis(side=2, at=prettything[prettything>mins[1] & prettything<maxes[1]],col=col[1],col.axis = col[1], las=2)
+  prettything1 <- pretty(c(maxes[1],mins[1]),n=10)  # added [1]
+  axis(side=2, at=prettything1[prettything1>mins[1] & prettything1<maxes[1]],col=col[1],col.axis = col[1], las=2)
   if(length(y)>=2) {
     for(i in 2:length(y)) {
       jagshelper::envelope(y[[i]]+maxes[1]-sum(ranges[1:(i-1)])-maxes[i], x=x, add=T,col=col[i],...=...)
       abline(h=maxes[1]-sum(ranges[1:(i-1)])-maxes[i], lty=3)
+      # axis(side=2, at=prettything[prettything>mins[i] & prettything<maxes[i]] + maxes[1]-sum(ranges[1:(i-1)])-maxes[i],
+      #      labels=prettything[prettything>mins[i] & prettything<maxes[i]],
+      #      col=col[i],col.axis = col[i], las=2)
+      # prettything <- pretty(c(maxes[i], mins[i]), n=3)   # need to smarterize the 3 here
+      prettything <- c(seq(from=0, to=mins[i], by=-diff(prettything1[1:2])),
+                       seq(from=0, to=maxes[i], by=diff(prettything1[1:2])))
       axis(side=2, at=prettything[prettything>mins[i] & prettything<maxes[i]] + maxes[1]-sum(ranges[1:(i-1)])-maxes[i],
            labels=prettything[prettything>mins[i] & prettything<maxes[i]],
            col=col[i],col.axis = col[i], las=2)

@@ -14,6 +14,10 @@ deterministic or stochastic cyclic component(s) as well as an AR(1) disturbance.
 * `runSS()` constructs and optionally runs the JAGS model, and contains inputs 
 for the data set used, model specification, and MCMC arguments.
 
+* `make_SS_data()` prepares a data object to be passed to the JAGS model, from
+the input time series.  This is called within `runSS()`, but can be called by
+itself.
+
 * `plot_components()` produces a plot of the respective components of a State-space 
 model.  Possible components include Trend, Cycle (stochastic and/or deterministic), 
 AR(1), and Irregular.  Model components will be plotted as posterior envelopes, 
