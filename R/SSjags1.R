@@ -3,7 +3,7 @@
 #' model, given an input time series and optional model components.
 #'
 #' This is a wrapper function, which constructs a model using the JAGS syntax according
-#' to model arguments provided by the user.  This is written to a temporary text file,
+#' to model arguments provided by the user.  The model is written to a temporary text file,
 #' which is called by 'JAGS' using `jagsUI::jags()`.
 #'
 #' ## Data model & state model
@@ -163,8 +163,9 @@
 #' @param x The corresponding time measurements, expressed as a numeric vector.
 #' If the default `NULL` is used, the time measurements will be assumed to be
 #' equally-spaced integer values.
-#' @param runmodel Whether to run the model in 'JAGS'.  If `FALSE`, the function will
-#' instead print the model in 'JAGS' syntax to the console, providing a check to
+#' @param runmodel Whether to run the model in 'JAGS', as the user may intend to
+#' print the model to the console instead.  Defaults to `TRUE`.
+#' @param printmodel Whether to print the model in 'JAGS' syntax to the console, providing a check to
 #' validate that the model is constructed as intended.  Defaults to `TRUE`.
 #' @param niter The number of MCMC iterations to run  Defaults to `2000`, which will
 #' almost certainly not be enough to achieve convergence! However, this default value
@@ -186,18 +187,26 @@
 #' Defaults to `FALSE`.
 #' @param sig_eps_prior The prior used for the IRREGULAR standard deviation(s),
 #' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
-#' to a constant, instead of treating it as a modeled quantity.  Defaults to `"dexp(0.2)"`
+#' to a constant, instead of treating it as a modeled quantity.  If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
 #' @param sig_xi_prior The prior used for the RATE DISTURBANCE standard deviation(s),
 #' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
-#' to a constant, instead of treating it as a modeled quantity.  Defaults to `"dexp(0.2)"`
+#' to a constant, instead of treating it as a modeled quantity.  If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
 #' @param sig_omega_prior The prior used for the CYCLIC DISTURBANCE standard deviation(s),
 #' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
 #' to a constant, instead of treating it as a modeled quantity.  Note that this argument
-#' will be ignored if `stochasticPeriods` is set to `NULL`.  Defaults to `"dexp(0.2)"`
+#' will be ignored if `stochasticPeriods` is set to `NULL`.   If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
 #' @param sig_psi_prior The prior used for the AR(1) PROCESS DISTURBANCE standard deviation,
 #' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
 #' to a constant, instead of treating it as a modeled quantity.  Note that this argument
-#' will be ignored unless `AR1` is set to `process`.  Defaults to `"dexp(0.2)"`
+#' will be ignored unless `AR1` is set to `process`.  If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
 #' @param phi_prior The prior used for the AR(1) autoregressive parameter,
 #' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
 #' to a constant, instead of treating it as a modeled quantity.  Note that this argument
@@ -220,7 +229,7 @@
 #' to `FALSE`, the rates and rate disturbance standard deviation may be interpreted
 #' as rate per unit time with respect to the input data units.  This functionality
 #' is retained in order to facilitate comparison with output from other software.
-#' Defaults to `TRUE`.
+#' Defaults to `FALSE`.
 #' @return An output object from `jagsUI::jags()`.  This will have the following
 #' parameters, in which n_t denotes the length of the input time series and
 #' n_s and n_d denote the number of stochastic and deterministic cycle periods, respectively:
@@ -240,8 +249,10 @@
 #' * **ypp: vector of length n_t** Posterior-predicted value at each epoch \eqn{i},
 #' equivalent to sampling a predicted value for each MCMC sample given that sample's
 #' values of fit and irregular standard deviation
-#' * **sig_eps: single value** Irregular standard deviation \eqn{\sigma_\epsilon}
-#' * **sig_xi: single value** Rate disturbance standard deviation \eqn{\sigma_\xi}
+#' * **sig_eps: vector** Irregular standard deviations \eqn{\sigma_\epsilon}
+#' for each time period (if there are structural breaks, otherwise a single parameter)
+#' * **sig_xi: vector** Rate disturbance standard deviations \eqn{\sigma_\xi}
+#' for each time period (if there are structural breaks, otherwise a single parameter)
 #' * **sig_omega (possibly): vector of length n_s** Cycle disturbance standard
 #' deviations \eqn{\sigma_{\omega,j}} for each stochastic period \eqn{j}
 #' * **phi (possibly): single value** Autoregressive parameter \eqn{\phi}
@@ -256,7 +267,7 @@
 #'                x = SS_data$x,                  # associated time measurements
 #'                stochasticPeriods = c(1, 0.5),  # stochastic cycle periods
 #'                niter = 10000,                  # number of MCMC iterations
-#'                runmodel = F)                   # print to console
+#'                runmodel = FALSE)               # just print to console
 #'
 #' \dontrun{
 #' jagsout <- runSS(y = SS_data$y,                # vector of observations
@@ -295,7 +306,7 @@ runSS <- function(y, x=NULL, runmodel=TRUE, printmodel=TRUE,
     sig_eps_prior <- paste0("dexp(", 1/(10^ceiling(log10(1/sqrt(SS_data$trendprecinit)))), ")")
   }
   if(is.null(sig_omega_prior)) {
-    sig_omega_prior <- paste0("dexp(", 1/(10^ceiling(log10(1/sqrt(SS_data$trendprecinit)))), ")")
+    sig_omega_prior <- paste0("dexp(", 1/(10^ceiling(log10(1/sqrt(SS_data$rateprecinit)))), ")")
   }
   if(is.null(sig_psi_prior)) {
     sig_psi_prior <- paste0("dexp(", 1/(10^ceiling(log10(1/sqrt(SS_data$trendprecinit)))), ")")
@@ -569,6 +580,99 @@ runSS <- function(y, x=NULL, runmodel=TRUE, printmodel=TRUE,
   }
 }
 
+
+
+
+#' Prepare the Data for a State-Space Model
+#' @description Prepares a data object to be used by \link{runSS}, also called
+#' internally within \link{runSS}.  The principal utility of
+#'
+#' The user may choose to use the model created by \link{runSS} as a starting
+#' point and make adjustments manually, in which case having the processed data
+#' at hand may make such adjustments more straightforward.  Additionally, it may
+#' be useful to have a check that the appropriate data is being used by the model.
+#'
+#' @param y The input time series, expressed as a numeric vector.
+#' @param x The corresponding time measurements, expressed as a numeric vector.
+#' If the default `NULL` is used, the time measurements will be assumed to be
+#' equally-spaced integer values.
+#' @param stochasticPeriods An optional vector of stochastic cycle periods, in
+#' units of time.  Defaults to `NULL`, indicating no stochastic cycle present.
+#' @param deterministicPeriods An optional vector of deterministic cycle periods, in
+#' units of time.  Defaults to `NULL`, indicating no deterministic cycle present.
+#' @param AR1 Whether to include an AR(1) autoregressive process.
+#' Defaults to `FALSE`.
+#' @param sig_eps_prior The prior used for the IRREGULAR standard deviation(s),
+#' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
+#' to a constant, instead of treating it as a modeled quantity.  If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
+#' @param sig_xi_prior The prior used for the RATE DISTURBANCE standard deviation(s),
+#' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
+#' to a constant, instead of treating it as a modeled quantity.  If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
+#' @param sig_omega_prior The prior used for the CYCLIC DISTURBANCE standard deviation(s),
+#' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
+#' to a constant, instead of treating it as a modeled quantity.  Note that this argument
+#' will be ignored if `stochasticPeriods` is set to `NULL`.   If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
+#' @param sig_psi_prior The prior used for the AR(1) PROCESS DISTURBANCE standard deviation,
+#' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
+#' to a constant, instead of treating it as a modeled quantity.  Note that this argument
+#' will be ignored unless `AR1` is set to `process`.  If the default `NULL`
+#' is used, an exponential prior will be used (`dexp()` in 'JAGS' syntax), with
+#' a rate parameter determined by the approximate scale of the data.
+#' @param phi_prior The prior used for the AR(1) autoregressive parameter,
+#' expressed in 'JAGS' syntax.  Note that providing a number here will set this value
+#' to a constant, instead of treating it as a modeled quantity.  Note that this argument
+#' will be ignored if `AR1==FALSE`.  Defaults to `"dunif(0,1)"`
+#' @param sigeps_breaks An optional vector of structural breakpoints in the irregular
+#' component, which may be interpreted as different irregular standard deviations
+#' in different time periods.  Breakpoints should be expressed in the units of the
+#' time measurements supplied to argument `x`.  A single breakpoint may be used if
+#' there are two time periods, etc.  Defaults to `NULL`, indicating no breaks.
+#' @param sigxi_breaks An optional vector of structural breakpoints in the RATE
+#' DISTURBANCE component, which may be interpreted as different RATE
+#' DISTURBANCE standard deviations
+#' in different time periods.  Breakpoints should be expressed in the units of the
+#' time measurements supplied to argument `x`.  A single breakpoint may be used if
+#' there are two time periods, etc.  Defaults to `NULL`, indicating no breaks.
+#' @param normalizedRate Whether to express treat the RATE DISTURBANCES as occurring
+#' on the normalized time scale, as opposed to the data time scale.  If this is set
+#' to `TRUE`, the rates and rate disturbance standard deviation may be interpreted
+#' as rate per normalized time step; If this is set
+#' to `FALSE`, the rates and rate disturbance standard deviation may be interpreted
+#' as rate per unit time with respect to the input data units.  This functionality
+#' is retained in order to facilitate comparison with output from other software.
+#' Defaults to `TRUE`.
+#' @return A list with the following components:
+#' * `y`: The input time series, expressed as a numeric vector
+#' * `n`: The length of the input time series
+#' * `startpoint`: The starting value of the time series
+#' * `trendprecinit`: The prior precision used for the initial value of trend
+#' * `rateprecinit`: The prior precision used for the initial value of rate
+#' * `sigeps_split`: A vector corresponding to the index of irregular standard deviation
+#' parameter used for each time series element
+#' * `n_sigeps_split`: The number of irregular standard devation parameters to estimate
+#' * `sigxi_split`: A vector corresponding to the index of rate disturbance standard deviation
+#' parameter used for each time series element
+#' * `n_sigxi_split`: The number of rate disturbance standard devation parameters to estimate
+#' * `phi_prior`: The prior used for autoregressive parameter phi
+#' * `p_s`: Stochastic periods, expressed as a numeric vector
+#' * `n_ps`: Number of stochastic periods
+#' * `p_d`: Deterministic periods, expressed as a numeric vector
+#' * `n_pd`: Number of deterministic periods
+#' * `sig_eps_prior_num`: Irregular standard deviation, if a constant (or vector of constants) is used
+#' * `sig_xi_prior_num`: Rate disturbance standard deviation, if a constant (or vector of constants) is used
+#' * `sig_eps_prior_num`: Cycle standard deviation, if a constant (or vector of constants) is used
+#' @author Matt Tyers
+#' @examples
+#' make_SS_data(y = SS_data$y,                   # vector of observations
+#'              x = SS_data$x,                   # associated time measurements
+#'              stochasticPeriods = c(1, 0.5)),  # stochastic cycle periods
+#' @export
 make_SS_data <- function(y, x=NULL,
                          stochasticPeriods=NULL, deterministicPeriods=NULL, AR1=FALSE,
                          sig_eps_prior=NULL,
@@ -590,7 +694,6 @@ make_SS_data <- function(y, x=NULL,
                   tt=x-x[1], pi=pi, x=x)
   SS_data$y[is.nan(SS_data$y)] <- NA
   SS_data$trendprecinit <- 1/var(SS_data$y, na.rm=T)
-  # SS_data$rateprecinit <- 1/var(diff(SS_data$y)/diff(SS_data$tt), na.rm=T)  ### make this normalized time step!!
   if(normalizedRate) {
     SS_data$rateprecinit <- 1/var(diff(SS_data$y)/SS_data$dt[-1], na.rm=T)
   } else {
