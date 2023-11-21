@@ -17,8 +17,8 @@ The main functionality is a wrapper function (\link{runSS}) that uses user input
 \tabular{ll}{
 Package: \tab SSjags\cr
 Type: \tab Package\cr
-Version: \tab 0.1.1\cr
-Date: \tab 2022-11-02\cr
+Version: \tab 0.1.2\cr
+Date: \tab 2023-11-20\cr
 License: \tab GPL-2\cr
 }
 }
